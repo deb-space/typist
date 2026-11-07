@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 typist contributors
+#
+# XcodeGen spec for the app target. Run `make project` to generate Typist.xcodeproj.
+# Library code lives in the Swift package at the repository root.
+
+name: Typist
+options:
+  bundleIdPrefix: space.deb
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  TypistKit:
+    path: .
+
+targets:
+  Typist:
+    type: application
+    platform: macOS
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
+    sources:
+      - App/Sources
+      - path: App/Resources
+        excludes:
+          - Info.plist
+          - Typist.entitlements
+    # Set as build settings, not via XcodeGen's `info`/`entitlements` keys:
+    # those regenerate the files and would overwrite them.
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Resources/Typist.entitlements
+    dependencies:
+      - package: TypistKit
+        product: TypistCore
+      - package: TypistKit
+        product: TypistAudio
+      - package: TypistKit
+        product: TypistProviders
+      - package: TypistKit
+        product: TypistStorage
+
+schemes:
+  Typist:
+    build:
+      targets:
+        Typist: all
+    test:
+      targets:
+        - package: TypistKit/TypistCoreTests

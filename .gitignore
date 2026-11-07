@@ -1,0 +1,17 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode (the project is generated from project.yml)
+Typist.xcodeproj/
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Per-developer signing settings
+Config/Local.xcconfig
+
+# macOS
+.DS_Store

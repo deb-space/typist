@@ -1,0 +1,23 @@
+typist — local-first AI dictation and meeting notes for macOS
+Copyright (C) 2026 typist contributors
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, version 3 of the License, or (at your option)
+any later version approved by deb-space, which shall act as a proxy as
+defined in Section 14 of version 3 of the License.
+
+"deb-space" means the deb-space organization (https://github.com/deb-space),
+represented by its maintainer Leo <idontwantsleep@gmail.com>, or a successor
+designated by them.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program (see the LICENSE file). If not, see
+<https://www.gnu.org/licenses/>.
+
+SPDX-License-Identifier: GPL-3.0-only

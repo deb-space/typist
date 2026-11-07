@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 typist contributors
+
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+PRODUCT_BUNDLE_IDENTIFIER = space.deb.typist
+MACOSX_DEPLOYMENT_TARGET = 15.0
+SWIFT_VERSION = 6.0
+ENABLE_HARDENED_RUNTIME = YES
+
+// Ad-hoc signing by default, so the project builds without an Apple account.
+// macOS may ask for permissions again after each rebuild. To keep them, put
+// your team in Config/Local.xcconfig (not tracked by git), for example:
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
