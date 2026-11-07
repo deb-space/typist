@@ -53,7 +53,7 @@ CODE_SIGN_IDENTITY = Apple Development
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Every commit must be signed off under the [Developer Certificate of Origin](https://developercertificate.org).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

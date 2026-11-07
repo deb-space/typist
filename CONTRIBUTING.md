@@ -8,24 +8,6 @@ Thanks for your interest. Typist is at an early stage, so before starting on a l
 - **Our own code.** Do not copy or adapt code from other dictation or meeting apps, including open-source ones. Looking at how other products behave is fine. Copying their code is not.
 - **Dependencies** must be compatible with GPL-3.0 (for example MIT, BSD or Apache-2.0). GPL-2.0-only and proprietary SDKs cannot be used. Add every new dependency to [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) in the same pull request.
 
-## Developer Certificate of Origin
-
-We do not use a CLA. Instead, every commit must be signed off to certify that you wrote it or otherwise have the right to submit it under the project's license, as described in the [Developer Certificate of Origin 1.1](https://developercertificate.org).
-
-Sign off by committing with `-s`:
-
-```sh
-git commit -s -m "Add microphone device picker"
-```
-
-This adds a line with your name and email, which must match the commit author:
-
-```
-Signed-off-by: Jane Doe <jane@example.com>
-```
-
-CI rejects pull requests with commits that are not signed off. To fix existing commits: `git rebase --signoff main`, then force-push.
-
 ## License headers
 
 Every source file starts with an SPDX header:

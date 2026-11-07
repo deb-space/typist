@@ -17,21 +17,16 @@ permissions:
 
 jobs:
   checks:
-    name: Lint, SPDX, DCO
+    name: Lint, SPDX
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Swift version
         run: swift --version
       - name: Lint
         run: make lint
       - name: SPDX headers
         run: scripts/check-spdx.sh
-      - name: DCO sign-off
-        if: github.event_name == 'pull_request'
-        run: scripts/check-dco.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
 
   test:
     name: Package build and tests

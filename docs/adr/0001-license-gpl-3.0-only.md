@@ -13,7 +13,7 @@ Typist is free and open source and competes with paid dictation and meeting apps
 - We do not use "GPL-3.0-or-later". That would automatically allow any future GPL version, whose terms we do not know yet.
 - `LICENSE` contains the unmodified GPL-3.0 text. `COPYING` contains the license notice with the proxy clause.
 - Every source file has the SPDX header `GPL-3.0-only`. CI checks it.
-- Contributions use the Developer Certificate of Origin (`Signed-off-by`), not a CLA. Contributors keep their copyright.
+- No CLA. Contributors keep their copyright, and contributions are licensed under the project's license (GitHub Terms of Service, section D.6). A Developer Certificate of Origin (`Signed-off-by`) requirement is deferred until the beta, when external contributors are expected.
 - Dependencies must be GPL-3.0 compatible (MIT, BSD, Apache-2.0 and similar). GPL-2.0-only and proprietary SDKs are not allowed. All dependencies are listed in `THIRD_PARTY_NOTICES.md`.
 
 ## Consequences
