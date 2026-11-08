@@ -14,13 +14,19 @@ let package = Package(
         .library(name: "TypistStorage", targets: ["TypistStorage"]),
         .library(name: "TypistInput", targets: ["TypistInput"]),
     ],
+    dependencies: [
+        // Exact versions: dependencies are reviewed for license and behavior before each upgrade.
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "1.1.1")
+    ],
     targets: [
         // Domain types and service protocols. No dependencies on other modules.
         .target(name: "TypistCore"),
         // Microphone and system audio capture.
         .target(name: "TypistAudio", dependencies: ["TypistCore"]),
         // STT, LLM and diarization providers: local engines and external endpoints.
-        .target(name: "TypistProviders", dependencies: ["TypistCore"]),
+        .target(
+            name: "TypistProviders",
+            dependencies: ["TypistCore", .product(name: "WhisperKit", package: "WhisperKit")]),
         // SQLite storage, audio files, Keychain.
         .target(name: "TypistStorage", dependencies: ["TypistCore"]),
         // Text insertion into other apps and global hotkeys.

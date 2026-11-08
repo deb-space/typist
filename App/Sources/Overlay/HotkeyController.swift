@@ -6,8 +6,7 @@ import OSLog
 import Observation
 import TypistInput
 
-/// Connects the fn hotkey to the dictation overlay. There is no transcription yet: the overlay
-/// shows the live microphone level and pretends to insert.
+/// Connects the fn hotkey to dictation.
 @MainActor @Observable
 final class HotkeyController {
     static let shared = HotkeyController()
@@ -37,22 +36,18 @@ final class HotkeyController {
 
     private func handle(_ event: HotkeyService.Event) {
         logger.info("hotkey event: \(String(describing: event), privacy: .public)")
-        let overlay = OverlayController.shared
+        let dictation = DictationController.shared
         switch event {
         case .holdStarted:
-            overlay.startTestDictation(handsFree: false, hint: "Release fn to insert · esc to cancel")
+            dictation.start(handsFree: false)
         case .handsFreeStarted:
-            if overlay.isTestDictating {
-                overlay.switchToHandsFree(hint: "fn to finish · esc to cancel")
-            } else {
-                overlay.startTestDictation(handsFree: true, hint: "fn to finish · esc to cancel")
-            }
+            dictation.switchToHandsFree()
         case .holdEnded, .handsFreeEnded:
-            overlay.finishTestDictation()
+            dictation.finish()
         case .cancelled:
-            overlay.cancelTestDictation()
+            dictation.cancel()
         case .aborted:
-            overlay.cancelTestDictation(quietly: true)
+            dictation.cancel(quietly: true)
         }
     }
 }

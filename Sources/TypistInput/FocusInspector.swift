@@ -28,6 +28,9 @@ public enum FocusInspector {
     /// Whether this app has the Accessibility permission (shown as Device Control on macOS 27).
     public static var isTrusted: Bool { AXIsProcessTrusted() }
 
+    /// Another app (usually a password field) has turned on secure keyboard entry.
+    public static var isSecureInputEnabled: Bool { IsSecureEventInputEnabled() }
+
     /// Shows the system prompt that leads to the permission, and adds the app to its list.
     @discardableResult
     public static func requestTrust() -> Bool {

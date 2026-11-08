@@ -32,8 +32,15 @@ private struct MenuContent: View {
 
     private var overlay: OverlayController { .shared }
     private var hotkey: HotkeyController { .shared }
+    private var dictation: DictationController { .shared }
 
     var body: some View {
+        Text(dictation.modelStatusText)
+        if case .failed = dictation.modelStatus {
+            Button("Retry Model Download") {
+                dictation.prepareModel()
+            }
+        }
         if hotkey.isRunning {
             Text("Hold fn to dictate · fn+Space for hands-free")
         } else {
@@ -83,11 +90,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AudioSpikeAutomation.runIfRequested()
             OverlaySnapshots.runIfRequested()
             InsertionSpikeAutomation.runIfRequested()
+            TranscriptionCheck.runIfRequested()
             // Spike runs launch extra copies of the app; only a normal launch takes the hotkey.
             if !ProcessInfo.processInfo.arguments.contains(where: {
-                $0.hasPrefix("--spike") || $0.hasPrefix("--overlay")
+                $0.hasPrefix("--spike") || $0.hasPrefix("--overlay") || $0.hasPrefix("--transcribe")
             }) {
                 HotkeyController.shared.start()
+                DictationController.shared.prepareModel()
             }
         }
     }
