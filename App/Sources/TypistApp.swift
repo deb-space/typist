@@ -71,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             AudioSpikeAutomation.runIfRequested()
             OverlaySnapshots.runIfRequested()
+            InsertionSpikeAutomation.runIfRequested()
         }
     }
 }

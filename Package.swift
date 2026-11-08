@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "TypistAudio", targets: ["TypistAudio"]),
         .library(name: "TypistProviders", targets: ["TypistProviders"]),
         .library(name: "TypistStorage", targets: ["TypistStorage"]),
+        .library(name: "TypistInput", targets: ["TypistInput"]),
     ],
     targets: [
         // Domain types and service protocols. No dependencies on other modules.
@@ -22,6 +23,8 @@ let package = Package(
         .target(name: "TypistProviders", dependencies: ["TypistCore"]),
         // SQLite storage, audio files, Keychain.
         .target(name: "TypistStorage", dependencies: ["TypistCore"]),
+        // Text insertion into other apps and global hotkeys.
+        .target(name: "TypistInput", dependencies: ["TypistCore"]),
 
         .testTarget(name: "TypistCoreTests", dependencies: ["TypistCore"]),
     ],

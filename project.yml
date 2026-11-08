@@ -44,6 +44,8 @@ targets:
         product: TypistProviders
       - package: TypistKit
         product: TypistStorage
+      - package: TypistKit
+        product: TypistInput
 
 schemes:
   Typist:
