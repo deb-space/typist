@@ -30,7 +30,23 @@ enum WindowID {
 private struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
 
+    private var overlay: OverlayController { .shared }
+
     var body: some View {
+        Button(overlay.isTestDictating ? "Stop Test Dictation" : "Test Dictation") {
+            overlay.toggleTestDictation()
+        }
+        if overlay.isTestDictating {
+            Button("Cancel Test Dictation") {
+                overlay.cancelTestDictation()
+            }
+        }
+        Button("Show All Overlay States") {
+            overlay.showAllStates()
+        }
+
+        Divider()
+
         Button("Audio Spike…") {
             openWindow(id: WindowID.audioSpike)
             NSApplication.shared.activate()
@@ -54,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             AudioSpikeAutomation.runIfRequested()
+            OverlaySnapshots.runIfRequested()
         }
     }
 }
