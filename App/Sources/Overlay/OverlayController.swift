@@ -82,14 +82,19 @@ final class OverlayController {
         if isTestDictating {
             finishTestDictation()
         } else {
-            startTestDictation()
+            startTestDictation(handsFree: true, hint: "Choose Stop Test Dictation in the menu bar")
         }
     }
 
-    private func startTestDictation() {
+    /// Shows the listening capsule driven by the real microphone. Nothing is recorded.
+    func startTestDictation(handsFree: Bool, hint: String) {
+        stopMeter()
         flow?.cancel()
         flow = Task {
-            guard await MicrophoneCapture.requestPermission() else {
+            let granted = await MicrophoneCapture.requestPermission()
+            // fn may already be released while the permission check was running.
+            guard !Task.isCancelled else { return }
+            guard granted else {
                 show(.needsMicrophone)
                 try? await Task.sleep(for: .seconds(4))
                 if model.phase == .needsMicrophone { hide() }
@@ -108,14 +113,20 @@ final class OverlayController {
             self.meter = meter
             model.isLiveTest = true
             model.resetLevels()
-            model.isHandsFree = true
+            model.isHandsFree = handsFree
             model.isRemote = false
             model.startedAt = Date()
-            show(.listening, hint: "Choose Stop Test Dictation in the menu bar")
+            show(.listening, hint: hint)
         }
     }
 
-    private func finishTestDictation() {
+    /// A hold turned into hands-free (fn+Space): keep listening, add the timer.
+    func switchToHandsFree(hint: String) {
+        model.isHandsFree = true
+        model.hint = hint
+    }
+
+    func finishTestDictation() {
         stopMeter()
         flow?.cancel()
         flow = Task {
@@ -129,9 +140,14 @@ final class OverlayController {
         }
     }
 
-    func cancelTestDictation() {
+    /// - Parameter quietly: hide without the ✕, for an aborted hold such as fn+arrow.
+    func cancelTestDictation(quietly: Bool = false) {
         stopMeter()
         flow?.cancel()
+        if quietly {
+            hide()
+            return
+        }
         flow = Task {
             show(.cancelled, hint: "Cancelled — nothing inserted")
             try? await Task.sleep(for: .milliseconds(1300))
