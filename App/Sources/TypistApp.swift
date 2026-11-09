@@ -33,6 +33,12 @@ private struct MenuContent: View {
     private var overlay: OverlayController { .shared }
     private var hotkey: HotkeyController { .shared }
     private var dictation: DictationController { .shared }
+    private var history: DictationHistory { .shared }
+
+    static func preview(_ text: String) -> String {
+        let line = text.replacingOccurrences(of: "\n", with: " ")
+        return line.count > 60 ? String(line.prefix(57)) + "…" : line
+    }
 
     var body: some View {
         Text(dictation.modelStatusText)
@@ -41,6 +47,25 @@ private struct MenuContent: View {
                 dictation.prepareModel()
             }
         }
+        if !history.entries.isEmpty {
+            Section("Recent — click to insert again") {
+                ForEach(history.entries.prefix(5)) { entry in
+                    Button(Self.preview(entry.text)) {
+                        dictation.reinsert(entry)
+                    }
+                }
+            }
+            if let last = history.entries.first {
+                Button("Copy Last Dictation") {
+                    dictation.copyToClipboard(last.text)
+                }
+            }
+            Button("Clear History") {
+                history.clear()
+            }
+            Divider()
+        }
+
         if hotkey.isRunning {
             Text("Hold fn to dictate · fn+Space for hands-free")
         } else {

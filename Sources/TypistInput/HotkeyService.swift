@@ -21,6 +21,9 @@ import CoreGraphics
 @MainActor
 public final class HotkeyService {
     public enum Event: Sendable {
+        /// fn went down and may become a hold. Start the microphone now so the first word is not
+        /// cut off; ``aborted`` follows if it turns out to be a tap or a shortcut.
+        case pressed
         case holdStarted, holdEnded, handsFreeStarted, handsFreeEnded, cancelled, aborted
     }
 
@@ -134,6 +137,7 @@ public final class HotkeyService {
                 onEvent?(.handsFreeStarted)
             } else {
                 state = .pending
+                onEvent?(.pressed)
                 holdTimer?.cancel()
                 holdTimer = Task { [weak self, holdDelay] in
                     try? await Task.sleep(for: holdDelay)
@@ -157,6 +161,7 @@ public final class HotkeyService {
             holdTimer?.cancel()
             state = .idle
             lastTapUp = Date()
+            onEvent?(.aborted)
         case .holding:
             state = .idle
             let held = fnDownAt.map { Date().timeIntervalSince($0) } ?? .infinity
@@ -191,6 +196,7 @@ public final class HotkeyService {
             holdTimer?.cancel()
             state = .idle
             ignoreNextFnUp = true
+            onEvent?(.aborted)
         case .holding where fnIsDown:
             state = .idle
             ignoreNextFnUp = true

@@ -38,6 +38,8 @@ final class HotkeyController {
         logger.info("hotkey event: \(String(describing: event), privacy: .public)")
         let dictation = DictationController.shared
         switch event {
+        case .pressed:
+            dictation.prepareRecording()
         case .holdStarted:
             dictation.start(handsFree: false)
         case .handsFreeStarted:

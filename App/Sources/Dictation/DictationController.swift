@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 typist contributors
 
+import AVFoundation
 import AppKit
 import OSLog
 import Observation
@@ -20,18 +21,29 @@ final class DictationController {
 
     private(set) var modelStatus: ModelStatus = .idle
     private(set) var isRecording = false
-    /// The last result, for the menu.
-    private(set) var lastTranscript: Transcript?
 
     @ObservationIgnored private let transcriber = WhisperKitTranscriber(
         modelsDirectory: URL.applicationSupportDirectory.appending(path: "Typist/Models", directoryHint: .isDirectory))
     @ObservationIgnored private var recorder: DictationRecorder?
     @ObservationIgnored private var flow: Task<Void, Never>?
+    @ObservationIgnored private var silenceWatch: Task<Void, Never>?
     @ObservationIgnored private let logger = Logger(subsystem: "space.deb.typist", category: "dictation")
+    @ObservationIgnored private var isOverlayShown = false
+    @ObservationIgnored private var isHandsFree = false
+    /// Whether the microphone heard anything louder than ``voiceLevel`` in this recording.
+    @ObservationIgnored private var heardVoice = false
+    @ObservationIgnored private var lastVoiceAt = Date()
     private var overlay: OverlayController { .shared }
+    private var history: DictationHistory { .shared }
 
     /// Recordings shorter than this are treated as accidental.
     private let minimumSeconds = 0.3
+    /// A normalized level above this counts as voice (about -43 dBFS).
+    private let voiceLevel: Float = 0.3
+    /// Hands-free stops after this much silence following speech. To become a setting.
+    private let silenceToStop: TimeInterval = 5
+    /// The microphone is switching devices: no audio, so silence does not count.
+    @ObservationIgnored private var isSwitchingMicrophone = false
 
     var modelName: String { "Whisper large-v3-turbo" }
 
@@ -69,49 +81,132 @@ final class DictationController {
 
     // MARK: - Recording
 
-    func start(handsFree: Bool) {
+    /// fn went down. Start the microphone without showing anything, so the first word is kept
+    /// if this turns into a hold. Only when the permission is already granted: a prompt on a tap
+    /// would be confusing.
+    func prepareRecording() {
+        guard recorder == nil, AVAudioApplication.shared.recordPermission == .granted else { return }
         flow?.cancel()
-        stopRecorder()
+        startRecorder()
+    }
+
+    func start(handsFree: Bool) {
+        isHandsFree = handsFree
+        if recorder != nil {
+            showListening()
+            return
+        }
+        flow?.cancel()
         flow = Task {
             let granted = await MicrophoneCapture.requestPermission()
+            // fn may already be released while the permission check was running.
             guard !Task.isCancelled else { return }
-            guard granted else {
+            guard granted, startRecorder() else {
                 overlay.show(.needsMicrophone)
                 return
             }
-            let recorder = DictationRecorder()
-            let model = overlay.model
-            do {
-                try recorder.start { level in
-                    Task { @MainActor in model.push(level: level) }
-                }
-            } catch {
-                logger.error("recorder failed: \(String(describing: error), privacy: .public)")
-                overlay.show(.needsMicrophone)
-                return
-            }
-            self.recorder = recorder
-            isRecording = true
-            model.resetLevels()
-            model.isHandsFree = handsFree
-            model.isRemote = false
-            model.startedAt = Date()
-            overlay.show(
-                .listening, hint: handsFree ? "fn to finish · esc to cancel" : "Release fn to insert · esc to cancel")
+            showListening()
         }
     }
 
     func switchToHandsFree() {
-        guard isRecording else { return start(handsFree: true) }
-        overlay.model.isHandsFree = true
-        overlay.model.hint = "fn to finish · esc to cancel"
+        isHandsFree = true
+        guard recorder != nil else { return start(handsFree: true) }
+        if isOverlayShown {
+            overlay.model.isHandsFree = true
+            overlay.model.hint = handsFreeHint
+        } else {
+            showListening()
+        }
+        watchForSilence()
+    }
+
+    private var handsFreeHint: String { "fn to finish · stops after \(Int(silenceToStop)) s of silence" }
+
+    @discardableResult
+    private func startRecorder() -> Bool {
+        let recorder = DictationRecorder()
+        let model = overlay.model
+        model.resetLevels()
+        heardVoice = false
+        lastVoiceAt = Date()
+        isSwitchingMicrophone = false
+        let voiceLevel = voiceLevel
+        do {
+            try recorder.start(
+                onLevel: { level in
+                    Task { @MainActor in
+                        model.push(level: level)
+                        if level > voiceLevel { DictationController.shared.noteVoice() }
+                    }
+                },
+                onEvent: { event in
+                    Task { @MainActor in DictationController.shared.handle(event) }
+                })
+        } catch {
+            logger.error("recorder failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+        self.recorder = recorder
+        isRecording = true
+        return true
+    }
+
+    private func handle(_ event: DictationRecorder.Event) {
+        switch event {
+        case .switching:
+            logger.info("microphone switching")
+            isSwitchingMicrophone = true
+            if isOverlayShown { overlay.model.hint = "Switching microphone…" }
+        case .restarted(let attempts):
+            logger.info("microphone restarted after \(attempts) attempt(s)")
+            isSwitchingMicrophone = false
+            // Start counting silence again from now.
+            lastVoiceAt = Date()
+            if isOverlayShown {
+                overlay.model.hint = isHandsFree ? handsFreeHint : "Release fn to insert · esc to cancel"
+            }
+        case .failed(let message):
+            logger.error("microphone restart failed: \(message, privacy: .public)")
+            isSwitchingMicrophone = false
+        }
+    }
+
+    private func noteVoice() {
+        heardVoice = true
+        lastVoiceAt = Date()
+    }
+
+    private func showListening() {
+        let model = overlay.model
+        model.isHandsFree = isHandsFree
+        model.isRemote = false
+        model.startedAt = Date()
+        isOverlayShown = true
+        overlay.show(.listening, hint: isHandsFree ? handsFreeHint : "Release fn to insert · esc to cancel")
+        if isHandsFree { watchForSilence() }
+    }
+
+    private func watchForSilence() {
+        silenceWatch?.cancel()
+        silenceWatch = Task {
+            while !Task.isCancelled, isRecording, isHandsFree {
+                try? await Task.sleep(for: .milliseconds(250))
+                if heardVoice, !isSwitchingMicrophone, Date().timeIntervalSince(lastVoiceAt) > silenceToStop {
+                    logger.info("hands-free stopped after silence")
+                    finish()
+                    return
+                }
+            }
+        }
     }
 
     func finish() {
+        silenceWatch?.cancel()
         guard let recorder else {
             // fn released before the microphone started.
             flow?.cancel()
-            overlay.hide()
+            hideOverlay()
             return
         }
         let samples = recorder.stop()
@@ -119,7 +214,17 @@ final class DictationController {
         isRecording = false
         let seconds = Double(samples.count) / DictationRecorder.sampleRate
         guard seconds >= minimumSeconds else {
-            overlay.hide()
+            hideOverlay()
+            return
+        }
+        // Whisper invents text on silence ("Thank you."), so skip it entirely.
+        guard heardVoice else {
+            flow = Task {
+                overlay.show(.cancelled, hint: "Didn’t hear anything")
+                try? await Task.sleep(for: .milliseconds(1300))
+                guard !Task.isCancelled else { return }
+                hideOverlay()
+            }
             return
         }
 
@@ -134,7 +239,6 @@ final class DictationController {
                 overlay.model.hint = "Transcribing on this Mac"
                 let transcript = try await transcriber.transcribe(samples)
                 guard !Task.isCancelled else { return }
-                lastTranscript = transcript
                 logger.info(
                     "transcribed \(transcript.audioSeconds, format: .fixed(precision: 1)) s in \(transcript.processingSeconds, format: .fixed(precision: 2)) s, \(transcript.wordCount) words, \(transcript.language ?? "?", privacy: .public)"
                 )
@@ -143,23 +247,24 @@ final class DictationController {
                 logger.error("transcription failed: \(String(describing: error), privacy: .public)")
                 overlay.show(.cancelled, hint: "Couldn’t transcribe — \(String(describing: error))")
                 try? await Task.sleep(for: .seconds(3))
-                overlay.hide()
+                hideOverlay()
             }
         }
     }
 
     func cancel(quietly: Bool = false) {
         flow?.cancel()
+        silenceWatch?.cancel()
         stopRecorder()
         guard !quietly else {
-            overlay.hide()
+            hideOverlay()
             return
         }
         flow = Task {
             overlay.show(.cancelled, hint: "Cancelled — nothing inserted")
             try? await Task.sleep(for: .milliseconds(1300))
             guard !Task.isCancelled else { return }
-            overlay.hide()
+            hideOverlay()
         }
     }
 
@@ -169,30 +274,55 @@ final class DictationController {
         isRecording = false
     }
 
+    private func hideOverlay() {
+        isOverlayShown = false
+        overlay.hide()
+    }
+
     // MARK: - Insertion
 
     private func insert(_ transcript: Transcript) async {
         guard !transcript.text.isEmpty else {
             overlay.show(.cancelled, hint: "Nothing recognized")
             try? await Task.sleep(for: .milliseconds(1500))
-            overlay.hide()
+            hideOverlay()
             return
         }
-        let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "the app in front"
+        let app = NSWorkspace.shared.frontmostApplication?.localizedName
+        history.add(.init(date: Date(), text: transcript.text, app: app, language: transcript.language))
         let timing = String(format: "%.1f s", transcript.processingSeconds)
 
         if FocusInspector.isSecureInputEnabled {
             // A password field: typing is blocked, so leave the text where the user can get it.
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(transcript.text, forType: .string)
+            copyToClipboard(transcript.text)
             overlay.show(.copied, hint: "Secure field — not typed")
             try? await Task.sleep(for: .seconds(3))
         } else {
             _ = await TextInserter.insert(transcript.text, method: .pasteboard)
-            overlay.show(.inserted, hint: "Inserted into \(app) · \(transcript.wordCount) words · \(timing)")
+            overlay.show(
+                .inserted,
+                hint: "Inserted into \(app ?? "the app in front") · \(transcript.wordCount) words · \(timing)")
             try? await Task.sleep(for: .milliseconds(1800))
         }
         guard !Task.isCancelled else { return }
-        overlay.hide()
+        hideOverlay()
+    }
+
+    /// Inserts an earlier dictation again into the app in front, from the menu.
+    func reinsert(_ entry: DictationHistory.Entry) {
+        Task {
+            // Let the menu close and focus return to the app.
+            try? await Task.sleep(for: .milliseconds(250))
+            if FocusInspector.isSecureInputEnabled {
+                copyToClipboard(entry.text)
+            } else {
+                _ = await TextInserter.insert(entry.text, method: .pasteboard)
+            }
+        }
+    }
+
+    func copyToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
