@@ -31,7 +31,7 @@ enum TranscriptionCheck {
                 lines.append(String(format: "model ready in %.1f s", Date().timeIntervalSince(prepareStart)))
                 for path in files {
                     let samples = try AudioFileSamples.load(URL(filePath: path))
-                    let transcript = try await transcriber.transcribe(samples)
+                    let transcript = try await transcriber.transcribe(samples, language: nil)
                     lines.append(
                         String(
                             format: "%@ | %.1f s audio | %.2f s | %@ | %@", (path as NSString).lastPathComponent,

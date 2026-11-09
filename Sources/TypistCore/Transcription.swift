@@ -21,6 +21,8 @@ public struct Transcript: Sendable, Equatable {
 
 /// A speech-to-text engine, on this Mac or behind an endpoint the user configured.
 public protocol TranscriptionProvider: Sendable {
-    /// - Parameter samples: 16 kHz mono audio in -1...1.
-    func transcribe(_ samples: [Float]) async throws -> Transcript
+    /// - Parameters:
+    ///   - samples: 16 kHz mono audio in -1...1.
+    ///   - language: ISO 639-1 code, or nil to detect it.
+    func transcribe(_ samples: [Float], language: String?) async throws -> Transcript
 }

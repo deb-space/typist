@@ -29,6 +29,12 @@ public actor WhisperKitTranscriber: TranscriptionProvider {
     private var whisper: WhisperKit?
     private var isPreparing = false
 
+    /// Where WhisperKit keeps a downloaded variant under `modelsDirectory`.
+    public static func folder(of variant: String, in modelsDirectory: URL) -> URL {
+        modelsDirectory.appending(
+            path: "models/argmaxinc/whisperkit-coreml/\(variant)", directoryHint: .isDirectory)
+    }
+
     public init(variant: String = defaultVariant, modelsDirectory: URL) {
         self.variant = variant
         self.modelsDirectory = modelsDirectory
@@ -62,11 +68,12 @@ public actor WhisperKitTranscriber: TranscriptionProvider {
         }
     }
 
-    public func transcribe(_ samples: [Float]) async throws -> Transcript {
+    public func transcribe(_ samples: [Float], language: String?) async throws -> Transcript {
         guard let whisper else { throw TranscriberError.notReady }
         let start = Date()
         let options = DecodingOptions(
-            task: .transcribe, language: nil, temperature: 0, usePrefillPrompt: true, detectLanguage: true,
+            task: .transcribe, language: language, temperature: 0, usePrefillPrompt: true,
+            detectLanguage: language == nil,
             skipSpecialTokens: true, withoutTimestamps: true)
         let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
         let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)

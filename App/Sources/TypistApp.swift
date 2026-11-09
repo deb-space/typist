@@ -12,9 +12,13 @@ struct TypistApp: App {
             MenuContent()
         }
 
-        Settings {
-            SettingsView()
+        Window("Typist", id: MainWindowRouter.windowID) {
+            MainWindowView()
         }
+        .defaultSize(width: 1000, height: 720)
+        // As in the design: no title bar, the window buttons sit over the sidebar.
+        .windowStyle(.hiddenTitleBar)
+        .windowBackgroundDragBehavior(.enabled)
 
         Window("Audio Spike", id: WindowID.audioSpike) {
             AudioSpikeView()
@@ -40,7 +44,20 @@ private struct MenuContent: View {
         return line.count > 60 ? String(line.prefix(57)) + "…" : line
     }
 
+    private func openMain(_ section: MainSection) {
+        MainWindowRouter.shared.selection = section
+        openWindow(id: MainWindowRouter.windowID)
+        NSApplication.shared.activate()
+    }
+
     var body: some View {
+        Button("Open Typist…") {
+            openMain(.home)
+        }
+        .keyboardShortcut("o")
+
+        Divider()
+
         Text(dictation.modelStatusText)
         if case .failed = dictation.modelStatus {
             Button("Retry Model Download") {
@@ -60,8 +77,8 @@ private struct MenuContent: View {
                     dictation.copyToClipboard(last.text)
                 }
             }
-            Button("Clear History") {
-                history.clear()
+            Button("Show History…") {
+                openMain(.history)
             }
             Divider()
         }
@@ -76,29 +93,28 @@ private struct MenuContent: View {
 
         Divider()
 
-        Button(overlay.isTestDictating ? "Stop Test Dictation" : "Test Dictation") {
-            overlay.toggleTestDictation()
-        }
-        if overlay.isTestDictating {
-            Button("Cancel Test Dictation") {
-                overlay.cancelTestDictation()
-            }
-        }
-        Button("Show All Overlay States") {
-            overlay.showAllStates()
-        }
-
-        Divider()
-
-        Button("Audio Spike…") {
-            openWindow(id: WindowID.audioSpike)
-            NSApplication.shared.activate()
-        }
-
-        SettingsLink {
-            Text("Settings…")
+        Button("Settings…") {
+            openMain(.settings)
         }
         .keyboardShortcut(",")
+
+        Menu("Developer") {
+            Button(overlay.isTestDictating ? "Stop Test Dictation" : "Test Dictation") {
+                overlay.toggleTestDictation()
+            }
+            if overlay.isTestDictating {
+                Button("Cancel Test Dictation") {
+                    overlay.cancelTestDictation()
+                }
+            }
+            Button("Show All Overlay States") {
+                overlay.showAllStates()
+            }
+            Button("Audio Spike…") {
+                openWindow(id: WindowID.audioSpike)
+                NSApplication.shared.activate()
+            }
+        }
 
         Divider()
 
@@ -116,9 +132,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             OverlaySnapshots.runIfRequested()
             InsertionSpikeAutomation.runIfRequested()
             TranscriptionCheck.runIfRequested()
+            MainWindowSnapshots.runIfRequested()
             // Spike runs launch extra copies of the app; only a normal launch takes the hotkey.
             if !ProcessInfo.processInfo.arguments.contains(where: {
                 $0.hasPrefix("--spike") || $0.hasPrefix("--overlay") || $0.hasPrefix("--transcribe")
+                    || $0.hasPrefix("--window")
             }) {
                 HotkeyController.shared.start()
                 DictationController.shared.prepareModel()

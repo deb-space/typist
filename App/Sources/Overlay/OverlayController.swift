@@ -73,7 +73,10 @@ final class OverlayController {
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main
         else { return }
         let frame = screen.visibleFrame
-        panel.setFrameOrigin(NSPoint(x: frame.midX - OverlayPanel.size.width / 2, y: frame.minY - 12))
+        let y =
+            AppSettings.shared.overlayPosition == .top
+            ? frame.maxY - OverlayPanel.size.height + 24 : frame.minY - 12
+        panel.setFrameOrigin(NSPoint(x: frame.midX - OverlayPanel.size.width / 2, y: y))
     }
 
     // MARK: - Test dictation with the real microphone

@@ -22,8 +22,10 @@ final class DictationController {
     private(set) var modelStatus: ModelStatus = .idle
     private(set) var isRecording = false
 
-    @ObservationIgnored private let transcriber = WhisperKitTranscriber(
-        modelsDirectory: URL.applicationSupportDirectory.appending(path: "Typist/Models", directoryHint: .isDirectory))
+    @ObservationIgnored private var transcriber = WhisperKitTranscriber(
+        variant: AppSettings.shared.modelVariant, modelsDirectory: SpeechModel.directory)
+    /// Increases when the model changes, so late state updates from the old one are ignored.
+    @ObservationIgnored private var modelGeneration = 0
     @ObservationIgnored private var recorder: DictationRecorder?
     @ObservationIgnored private var flow: Task<Void, Never>?
     @ObservationIgnored private var silenceWatch: Task<Void, Never>?
@@ -35,17 +37,19 @@ final class DictationController {
     @ObservationIgnored private var lastVoiceAt = Date()
     private var overlay: OverlayController { .shared }
     private var history: DictationHistory { .shared }
+    private var settings: AppSettings { .shared }
 
     /// Recordings shorter than this are treated as accidental.
     private let minimumSeconds = 0.3
     /// A normalized level above this counts as voice (about -43 dBFS).
     private let voiceLevel: Float = 0.3
-    /// Hands-free stops after this much silence following speech. To become a setting.
-    private let silenceToStop: TimeInterval = 5
+    /// Hands-free stops after this much silence following speech.
+    private var silenceToStop: TimeInterval { settings.autostopSeconds }
     /// The microphone is switching devices: no audio, so silence does not count.
     @ObservationIgnored private var isSwitchingMicrophone = false
 
     var modelName: String { "Whisper large-v3-turbo" }
+    var currentModel: SpeechModel { SpeechModel.named(settings.modelVariant) }
 
     var modelStatusText: String {
         switch modelStatus {
@@ -60,14 +64,33 @@ final class DictationController {
     // MARK: - Model
 
     func prepareModel() {
+        let transcriber = transcriber
+        let generation = modelGeneration
         Task {
             try? await transcriber.prepare { state in
-                Task { @MainActor in DictationController.shared.update(state) }
+                Task { @MainActor in DictationController.shared.update(state, generation: generation) }
             }
         }
     }
 
-    private func update(_ state: WhisperKitTranscriber.State) {
+    /// Switches to another speech model, downloading it if needed.
+    func selectModel(_ model: SpeechModel) {
+        guard model.variant != settings.modelVariant else { return }
+        settings.modelVariant = model.variant
+        modelGeneration += 1
+        transcriber = WhisperKitTranscriber(variant: model.variant, modelsDirectory: SpeechModel.directory)
+        modelStatus = .idle
+        prepareModel()
+    }
+
+    /// Deletes a downloaded model that is not in use.
+    func deleteModel(_ model: SpeechModel) throws {
+        guard model.variant != settings.modelVariant else { return }
+        try FileManager.default.removeItem(at: model.folder)
+    }
+
+    private func update(_ state: WhisperKitTranscriber.State, generation: Int) {
+        guard generation == modelGeneration else { return }
         switch state {
         case .idle: modelStatus = .idle
         case .downloading(let fraction): modelStatus = .downloading(fraction)
@@ -182,7 +205,9 @@ final class DictationController {
         model.isHandsFree = isHandsFree
         model.isRemote = false
         model.startedAt = Date()
+        model.showsHints = settings.showHints
         isOverlayShown = true
+        if settings.playSounds { NSSound(named: "Tink")?.play() }
         overlay.show(.listening, hint: isHandsFree ? handsFreeHint : "Release fn to insert · esc to cancel")
         if isHandsFree { watchForSilence() }
     }
@@ -233,11 +258,13 @@ final class DictationController {
             overlay.show(
                 .processing, hint: modelStatus == .ready ? "Transcribing on this Mac" : "Loading \(modelName)…")
             do {
+                let transcriber = transcriber
+                let generation = modelGeneration
                 try await transcriber.prepare { state in
-                    Task { @MainActor in DictationController.shared.update(state) }
+                    Task { @MainActor in DictationController.shared.update(state, generation: generation) }
                 }
                 overlay.model.hint = "Transcribing on this Mac"
-                let transcript = try await transcriber.transcribe(samples)
+                let transcript = try await transcriber.transcribe(samples, language: settings.language)
                 guard !Task.isCancelled else { return }
                 logger.info(
                     "transcribed \(transcript.audioSeconds, format: .fixed(precision: 1)) s in \(transcript.processingSeconds, format: .fixed(precision: 2)) s, \(transcript.wordCount) words, \(transcript.language ?? "?", privacy: .public)"
@@ -298,7 +325,9 @@ final class DictationController {
             overlay.show(.copied, hint: "Secure field — not typed")
             try? await Task.sleep(for: .seconds(3))
         } else {
-            _ = await TextInserter.insert(transcript.text, method: .pasteboard)
+            _ = await TextInserter.insert(
+                transcript.text, method: .pasteboard, restoreClipboard: settings.restoreClipboard)
+            if settings.playSounds { NSSound(named: "Pop")?.play() }
             overlay.show(
                 .inserted,
                 hint: "Inserted into \(app ?? "the app in front") · \(transcript.wordCount) words · \(timing)")
@@ -316,7 +345,8 @@ final class DictationController {
             if FocusInspector.isSecureInputEnabled {
                 copyToClipboard(entry.text)
             } else {
-                _ = await TextInserter.insert(entry.text, method: .pasteboard)
+                _ = await TextInserter.insert(
+                    entry.text, method: .pasteboard, restoreClipboard: settings.restoreClipboard)
             }
         }
     }

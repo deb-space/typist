@@ -28,11 +28,29 @@ final class DictationHistory {
             decoder.dateDecodingStrategy = .iso8601
             entries = (try? decoder.decode([Entry].self, from: data)) ?? []
         }
+        prune()
     }
 
     func add(_ entry: Entry) {
+        guard AppSettings.shared.historyRetention != .never else { return }
         entries.insert(entry, at: 0)
         if entries.count > Self.limit { entries.removeLast(entries.count - Self.limit) }
+        prune()
+        save()
+    }
+
+    func remove(_ entry: Entry) {
+        entries.removeAll { $0.id == entry.id }
+        save()
+    }
+
+    /// Drops entries older than the retention setting.
+    func prune() {
+        guard let days = AppSettings.shared.historyRetention.days else { return }
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let kept = entries.filter { $0.date >= cutoff }
+        guard kept.count != entries.count else { return }
+        entries = kept
         save()
     }
 
