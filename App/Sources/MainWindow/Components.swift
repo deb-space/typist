@@ -231,6 +231,8 @@ struct ThemedToggle: View {
     var body: some View {
         Toggle(label, isOn: $isOn)
             .toggleStyle(.switch)
+            // The regular switch looks oversized next to 13–14 pt text.
+            .controlSize(.small)
             .labelsHidden()
             .tint(palette.accent)
     }
