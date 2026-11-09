@@ -68,13 +68,18 @@ public actor WhisperKitTranscriber: TranscriptionProvider {
         }
     }
 
-    public func transcribe(_ samples: [Float], language: String?) async throws -> Transcript {
+    public func transcribe(_ samples: [Float], language: String?, prompt: String?) async throws -> Transcript {
         guard let whisper else { throw TranscriberError.notReady }
         let start = Date()
-        let options = DecodingOptions(
+        var options = DecodingOptions(
             task: .transcribe, language: language, temperature: 0, usePrefillPrompt: true,
             detectLanguage: language == nil,
             skipSpecialTokens: true, withoutTimestamps: true)
+        if let prompt, !prompt.isEmpty, let tokenizer = whisper.tokenizer {
+            // Whisper's "previous text" prompt: terms in it are recognized more often.
+            options.promptTokens = tokenizer.encode(text: " " + prompt)
+                .filter { $0 < tokenizer.specialTokens.specialTokenBegin }
+        }
         let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
         let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         return Transcript(

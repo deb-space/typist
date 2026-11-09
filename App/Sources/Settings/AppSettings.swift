@@ -3,6 +3,7 @@
 
 import Foundation
 import Observation
+import TypistCore
 import TypistProviders
 
 /// User preferences, stored in UserDefaults. The main window edits them, dictation reads them.
@@ -72,6 +73,25 @@ final class AppSettings {
     var modelVariant: String { didSet { store(modelVariant, "modelVariant") } }
     var dismissedGlobeTip: Bool { didSet { store(dismissedGlobeTip, "dismissedGlobeTip") } }
     var theme: Theme { didSet { store(theme.rawValue, "theme") } }
+    /// Rule-based cleanup: fillers, stutters and phrases Whisper invents.
+    var cleanupEnabled: Bool { didSet { store(cleanupEnabled, "cleanupEnabled") } }
+    /// The personal dictionary.
+    var replacements: [Replacement] {
+        didSet { store((try? JSONEncoder().encode(replacements)) ?? Data(), "replacements") }
+    }
+
+    /// Dictionary terms as a hint for speech recognition.
+    var recognitionPrompt: String? {
+        let terms = Array(Set(replacements.map { $0.to.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }))
+            .sorted()
+        return terms.isEmpty ? nil : terms.joined(separator: ", ")
+    }
+
+    var cleanup: TextCleanup {
+        TextCleanup(
+            removesFillers: cleanupEnabled, removesStutters: cleanupEnabled, removesPhantomPhrases: cleanupEnabled,
+            replacements: replacements)
+    }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -88,6 +108,10 @@ final class AppSettings {
         modelVariant = defaults.string(forKey: "modelVariant") ?? WhisperKitTranscriber.defaultVariant
         dismissedGlobeTip = defaults.bool(forKey: "dismissedGlobeTip")
         theme = defaults.string(forKey: "theme").flatMap(Theme.init) ?? .dark
+        cleanupEnabled = defaults.object(forKey: "cleanupEnabled") as? Bool ?? true
+        replacements =
+            defaults.data(forKey: "replacements").flatMap { try? JSONDecoder().decode([Replacement].self, from: $0) }
+            ?? []
     }
 
     private func store(_ value: Any, _ key: String) {

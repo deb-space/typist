@@ -9,6 +9,7 @@ import TypistProviders
 /// microphone:
 ///
 ///     open Typist.app --args --transcribe-files <file>... --transcribe-output <result.txt>
+///         [--transcribe-prompt "Kubernetes, Helm"]
 @MainActor
 enum TranscriptionCheck {
     static func runIfRequested() {
@@ -19,6 +20,9 @@ enum TranscriptionCheck {
         else { return }
         let files = arguments[(start + 1)...].prefix { !$0.hasPrefix("--") }
         let output = URL(filePath: arguments[outputIndex + 1])
+        let prompt = arguments.firstIndex(of: "--transcribe-prompt").flatMap {
+            arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil
+        }
 
         Task {
             var lines: [String] = []
@@ -31,7 +35,7 @@ enum TranscriptionCheck {
                 lines.append(String(format: "model ready in %.1f s", Date().timeIntervalSince(prepareStart)))
                 for path in files {
                     let samples = try AudioFileSamples.load(URL(filePath: path))
-                    let transcript = try await transcriber.transcribe(samples, language: nil)
+                    let transcript = try await transcriber.transcribe(samples, language: nil, prompt: prompt)
                     lines.append(
                         String(
                             format: "%@ | %.1f s audio | %.2f s | %@ | %@", (path as NSString).lastPathComponent,

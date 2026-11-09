@@ -2,6 +2,7 @@
 // Copyright (C) 2026 typist contributors
 
 import SwiftUI
+import TypistCore
 
 struct SettingsPage: View {
     @Environment(\.palette) private var palette
@@ -60,6 +61,18 @@ struct SettingsPage: View {
                         label: "Language")
                 }
             }
+
+            CardSection("Text cleanup") {
+                CardRow(
+                    "Clean up text",
+                    "Removes “um” and “э”, stutters like “я я”, and phrases Whisper invents, like “Продолжение следует…”",
+                    divider: false
+                ) {
+                    ThemedToggle(label: "Clean up text", isOn: $settings.cleanupEnabled)
+                }
+            }
+
+            DictionarySection()
 
             CardSection("Inserting text") {
                 CardRow(
@@ -137,5 +150,71 @@ private struct ThemeOption: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(theme.title) theme")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// The personal dictionary: what Whisper writes, and what it should be.
+private struct DictionarySection: View {
+    @Environment(\.palette) private var palette
+    @Bindable private var settings = AppSettings.shared
+
+    /// A binding to one field of an entry, found by id, so removing a row never leaves a
+    /// text field pointing at a stale index.
+    private func binding(_ id: UUID, _ field: WritableKeyPath<Replacement, String>) -> Binding<String> {
+        Binding(
+            get: { settings.replacements.first { $0.id == id }?[keyPath: field] ?? "" },
+            set: { value in
+                guard let index = settings.replacements.firstIndex(where: { $0.id == id }) else { return }
+                settings.replacements[index][keyPath: field] = value
+            })
+    }
+
+    var body: some View {
+        CardSection("Personal dictionary") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(
+                    "Typist replaces these after recognition and also hints the right spelling to Whisper, so it gets the terms right more often."
+                )
+                .font(.system(size: 12.5))
+                .foregroundStyle(palette.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                if !settings.replacements.isEmpty {
+                    HStack(spacing: 10) {
+                        Text("Heard as").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Write as").frame(maxWidth: .infinity, alignment: .leading)
+                        Color.clear.frame(width: 30, height: 1)
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.secondaryText)
+                }
+                ForEach(settings.replacements) { entry in
+                    let id = entry.id
+                    HStack(spacing: 10) {
+                        ThemedField(placeholder: "кубернетус", text: binding(id, \.from))
+                            .accessibilityLabel("Heard as")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(palette.secondaryText)
+                        ThemedField(placeholder: "Kubernetes", text: binding(id, \.to))
+                            .accessibilityLabel("Write as")
+                        Button {
+                            // Capture the id first: reading the entry while the array is being
+                            // mutated is an exclusivity violation and crashes.
+                            settings.replacements.removeAll { $0.id == id }
+                        } label: {
+                            Image(systemName: "trash").font(.system(size: 12))
+                        }
+                        .buttonStyle(.themedSmall)
+                        .help("Remove")
+                        .accessibilityLabel("Remove \(entry.to.isEmpty ? entry.from : entry.to)")
+                    }
+                }
+                Button("Add Word") {
+                    settings.replacements.append(Replacement(from: "", to: ""))
+                }
+                .buttonStyle(.themed)
+            }
+            .padding(.vertical, 16)
+        }
     }
 }

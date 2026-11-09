@@ -24,5 +24,6 @@ public protocol TranscriptionProvider: Sendable {
     /// - Parameters:
     ///   - samples: 16 kHz mono audio in -1...1.
     ///   - language: ISO 639-1 code, or nil to detect it.
-    func transcribe(_ samples: [Float], language: String?) async throws -> Transcript
+    ///   - prompt: Words the speaker is likely to use (names, terms), to bias recognition.
+    func transcribe(_ samples: [Float], language: String?, prompt: String?) async throws -> Transcript
 }

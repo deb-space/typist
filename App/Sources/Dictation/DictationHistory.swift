@@ -11,6 +11,8 @@ final class DictationHistory {
         var id = UUID()
         var date: Date
         var text: String
+        /// What the model heard, when cleanup changed it.
+        var rawText: String?
         /// The app the text was inserted into.
         var app: String?
         var language: String?

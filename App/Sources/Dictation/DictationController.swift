@@ -264,12 +264,15 @@ final class DictationController {
                     Task { @MainActor in DictationController.shared.update(state, generation: generation) }
                 }
                 overlay.model.hint = "Transcribing on this Mac"
-                let transcript = try await transcriber.transcribe(samples, language: settings.language)
+                var transcript = try await transcriber.transcribe(
+                    samples, language: settings.language, prompt: settings.recognitionPrompt)
+                let raw = transcript.text
+                transcript.text = settings.cleanup.apply(to: raw)
                 guard !Task.isCancelled else { return }
                 logger.info(
                     "transcribed \(transcript.audioSeconds, format: .fixed(precision: 1)) s in \(transcript.processingSeconds, format: .fixed(precision: 2)) s, \(transcript.wordCount) words, \(transcript.language ?? "?", privacy: .public)"
                 )
-                await insert(transcript)
+                await insert(transcript, raw: raw)
             } catch {
                 logger.error("transcription failed: \(String(describing: error), privacy: .public)")
                 overlay.show(.cancelled, hint: "Couldn’t transcribe — \(String(describing: error))")
@@ -308,7 +311,7 @@ final class DictationController {
 
     // MARK: - Insertion
 
-    private func insert(_ transcript: Transcript) async {
+    private func insert(_ transcript: Transcript, raw: String) async {
         guard !transcript.text.isEmpty else {
             overlay.show(.cancelled, hint: "Nothing recognized")
             try? await Task.sleep(for: .milliseconds(1500))
@@ -316,7 +319,10 @@ final class DictationController {
             return
         }
         let app = NSWorkspace.shared.frontmostApplication?.localizedName
-        history.add(.init(date: Date(), text: transcript.text, app: app, language: transcript.language))
+        history.add(
+            .init(
+                date: Date(), text: transcript.text, rawText: raw == transcript.text ? nil : raw, app: app,
+                language: transcript.language))
         let timing = String(format: "%.1f s", transcript.processingSeconds)
 
         if FocusInspector.isSecureInputEnabled {

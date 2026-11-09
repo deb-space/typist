@@ -40,7 +40,7 @@ struct ModelsPage: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(palette.secondaryText)
                 Text(
-                    "Removing “um”, repeats and self-corrections with a small local model comes next. Until then Typist inserts exactly what Whisper heard."
+                    "Rule-based cleanup and your personal dictionary are in Settings. Fixing self-corrections and adapting the style to the app with a small local language model comes next."
                 )
                 .font(.system(size: 13))
                 .foregroundStyle(palette.secondaryText)

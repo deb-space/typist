@@ -54,11 +54,20 @@ struct HistoryPage: View {
             }
             .font(.system(size: 12))
             .frame(width: 120, alignment: .leading)
-            Text(entry.text)
-                .font(.system(size: 14))
-                .lineSpacing(2)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.text)
+                    .font(.system(size: 14))
+                    .lineSpacing(2)
+                    .textSelection(.enabled)
+                if let raw = entry.rawText {
+                    Text("Heard: \(raw)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.secondaryText)
+                        .textSelection(.enabled)
+                        .help("What Whisper wrote before cleanup and your dictionary")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 6) {
                 Button(copiedID == entry.id ? "Copied" : "Copy") { copy(entry) }
                     .buttonStyle(.themedSmall)
