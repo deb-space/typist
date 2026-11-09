@@ -113,8 +113,8 @@ struct ThemedButtonStyle: ButtonStyle {
 
         private var foreground: Color {
             switch kind {
-            case .primary: Color(hex: 0x121622)
-            case .destructive: .typistDanger
+            case .primary: palette.onAccent
+            case .destructive: palette.danger
             case .quiet: palette.secondaryText
             case .secondary: palette.text
             }
@@ -122,7 +122,7 @@ struct ThemedButtonStyle: ButtonStyle {
 
         private var background: Color {
             switch kind {
-            case .primary: .typistAccent
+            case .primary: palette.accent
             case .secondary: palette.control
             case .destructive, .quiet: .clear
             }
@@ -131,7 +131,7 @@ struct ThemedButtonStyle: ButtonStyle {
         private var border: Color {
             switch kind {
             case .secondary: palette.controlBorder
-            case .destructive: Color.typistDanger.opacity(0.4)
+            case .destructive: palette.danger.opacity(0.4)
             case .primary, .quiet: .clear
             }
         }
@@ -224,6 +224,7 @@ struct ThemedSegments<Value: Hashable>: View {
 }
 
 struct ThemedToggle: View {
+    @Environment(\.palette) private var palette
     let label: String
     @Binding var isOn: Bool
 
@@ -231,7 +232,7 @@ struct ThemedToggle: View {
         Toggle(label, isOn: $isOn)
             .toggleStyle(.switch)
             .labelsHidden()
-            .tint(.typistAccent)
+            .tint(palette.accent)
     }
 }
 
@@ -239,17 +240,19 @@ struct ThemedToggle: View {
 
 /// A key drawn like a keycap.
 struct Keycap: View {
+    @Environment(\.palette) private var palette
     let label: String
     init(_ label: String) { self.label = label }
 
     var body: some View {
         Text(label)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color(hex: 0x121622))
+            .foregroundStyle(palette.keycapText)
             .padding(.horizontal, 8)
             .frame(minWidth: 28, minHeight: 24)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xE8EBF2)))
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x7C8599)).offset(y: 2))
+            .background(RoundedRectangle(cornerRadius: 6).fill(palette.keycap))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.keycapShadow.opacity(0.5)))
+            .background(RoundedRectangle(cornerRadius: 6).fill(palette.keycapShadow).offset(y: 2))
             .accessibilityLabel(label)
     }
 }
@@ -263,9 +266,9 @@ struct Chip: View {
     var body: some View {
         Text(text)
             .font(.system(size: 12))
-            .foregroundStyle(highlighted ? Color(hex: 0xC3CFFF) : palette.secondaryText)
+            .foregroundStyle(highlighted ? palette.accentText : palette.secondaryText)
             .padding(.horizontal, 9)
             .padding(.vertical, 3)
-            .background(Capsule().fill(highlighted ? Color.typistAccent.opacity(0.16) : palette.control))
+            .background(Capsule().fill(highlighted ? palette.accent.opacity(0.16) : palette.control))
     }
 }

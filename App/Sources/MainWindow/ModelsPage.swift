@@ -24,7 +24,7 @@ struct ModelsPage: View {
 
             CardSection("Your own endpoints") {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "cloud").foregroundStyle(Color.typistOutside)
+                    Image(systemName: "cloud").foregroundStyle(palette.outside)
                     Text(
                         "A Whisper server at home, Ollama, or a cloud API with your own key. It comes with text cleanup, and the overlay will mark it in amber whenever audio or text goes there. Until then Typist uses the network only to download the models above."
                     )
@@ -108,7 +108,7 @@ struct ModelsPage: View {
         case .ready:
             Chip(text: "In use", highlighted: true)
         case .failed:
-            Text("Failed").foregroundStyle(Color.typistDanger)
+            Text("Failed").foregroundStyle(palette.danger)
             Button("Retry") { dictation.prepareModel() }.buttonStyle(.themed)
         }
     }

@@ -37,9 +37,9 @@ struct HomePage: View {
         HStack(alignment: .center, spacing: 24) {
             Image(systemName: "mic")
                 .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(Color.typistAccent)
+                .foregroundStyle(palette.accent)
                 .frame(width: 56, height: 56)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.typistAccent.opacity(0.14)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(palette.accent.opacity(0.14)))
             VStack(alignment: .leading, spacing: 8) {
                 Text(headline).font(.system(size: 18, weight: .semibold))
                 HStack(spacing: 6) {
@@ -87,7 +87,7 @@ struct HomePage: View {
 
     private var globeTip: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "globe").foregroundStyle(Color.typistOutside).padding(.top, 2)
+            Image(systemName: "globe").foregroundStyle(palette.outside).padding(.top, 2)
             VStack(alignment: .leading, spacing: 6) {
                 Text("A quick tap on fn switches your keyboard layout").font(.system(size: 14, weight: .semibold))
                 Text(
@@ -108,8 +108,8 @@ struct HomePage: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.typistOutside.opacity(0.10)))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.typistOutside.opacity(0.35)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(palette.outside.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.outside.opacity(0.35)))
     }
 
     private var recent: some View {
@@ -122,7 +122,7 @@ struct HomePage: View {
                 Button("Show All") { MainWindowRouter.shared.selection = .history }
                     .buttonStyle(.plain)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.typistAccent)
+                    .foregroundStyle(palette.accent)
             }
             VStack(spacing: 0) {
                 if history.entries.isEmpty {

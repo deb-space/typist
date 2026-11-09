@@ -108,7 +108,7 @@ private struct ThemeOption: View {
                             VStack(spacing: 5) {
                                 ForEach(0..<4, id: \.self) { index in
                                     Capsule()
-                                        .fill(index == 0 ? Color.typistAccent.opacity(0.5) : .white.opacity(0.18))
+                                        .fill(index == 0 ? palette.accent.opacity(0.5) : palette.text.opacity(0.18))
                                         .frame(height: 5)
                                 }
                             }
@@ -128,7 +128,7 @@ private struct ThemeOption: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
-                            isSelected ? Color.typistAccent : current.controlBorder, lineWidth: isSelected ? 2 : 1))
+                            isSelected ? current.accent : current.controlBorder, lineWidth: isSelected ? 2 : 1))
                 Text(theme.title)
                     .font(.system(size: 13))
                     .foregroundStyle(isSelected ? current.text : current.secondaryText)

@@ -21,9 +21,16 @@ final class AppSettings {
         case dark
         /// Ink-navy surfaces from the deb.space palette.
         case darkBlue
+        case light
 
         var id: Self { self }
-        var title: String { self == .dark ? "Dark" : "Dark Blue" }
+        var title: String {
+            switch self {
+            case .dark: "Dark"
+            case .darkBlue: "Dark Blue"
+            case .light: "Light"
+            }
+        }
     }
 
     enum HistoryRetention: String, CaseIterable, Identifiable {

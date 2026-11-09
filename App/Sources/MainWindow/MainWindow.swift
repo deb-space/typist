@@ -83,8 +83,8 @@ struct MainWindowView: View {
         .ignoresSafeArea()
         .foregroundStyle(palette.text)
         .environment(\.palette, palette)
-        .tint(.typistAccent)
-        .preferredColorScheme(.dark)
+        .tint(palette.accent)
+        .preferredColorScheme(palette.scheme)
         .frame(minWidth: 860, minHeight: 600)
         .onAppear {
             // Show in the Dock and ⌘-Tab while the window is open.
@@ -119,7 +119,7 @@ private struct Sidebar: View {
             HStack(spacing: 10) {
                 Image(systemName: "waveform")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.typistAccent)
+                    .foregroundStyle(palette.accent)
                     .frame(width: 30, height: 30)
                     .background(RoundedRectangle(cornerRadius: 8).fill(palette.card))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(palette.border))
@@ -139,7 +139,7 @@ private struct Sidebar: View {
                     HStack(spacing: 10) {
                         Image(systemName: section.systemImage)
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.typistAccent)
+                            .foregroundStyle(palette.accent)
                             .frame(width: 18)
                         Text(section.title)
                             .foregroundStyle(selected ? palette.text : palette.text.opacity(0.85))
