@@ -23,6 +23,7 @@ struct CardSection<Content: View>: View {
             }
             VStack(spacing: 0) { content }
                 .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .card()
         }
     }

@@ -41,6 +41,14 @@ final class DictationHistory {
         save()
     }
 
+    /// Replaces an entry's text, keeping what the model originally heard.
+    func correct(_ entry: Entry, to text: String) {
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }), entries[index].text != text else { return }
+        if entries[index].rawText == nil { entries[index].rawText = entries[index].text }
+        entries[index].text = text
+        save()
+    }
+
     func remove(_ entry: Entry) {
         entries.removeAll { $0.id == entry.id }
         save()

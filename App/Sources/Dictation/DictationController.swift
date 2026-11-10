@@ -267,7 +267,9 @@ final class DictationController {
                 var transcript = try await transcriber.transcribe(
                     samples, language: settings.language, prompt: settings.recognitionPrompt)
                 let raw = transcript.text
-                transcript.text = settings.cleanup.apply(to: raw)
+                let cleaned = settings.cleanup.applyCountingUses(to: raw)
+                transcript.text = cleaned.text
+                settings.recordUses(cleaned.uses)
                 guard !Task.isCancelled else { return }
                 logger.info(
                     "transcribed \(transcript.audioSeconds, format: .fixed(precision: 1)) s in \(transcript.processingSeconds, format: .fixed(precision: 2)) s, \(transcript.wordCount) words, \(transcript.language ?? "?", privacy: .public)"

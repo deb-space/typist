@@ -9,6 +9,7 @@ struct HistoryPage: View {
     private var settings: AppSettings { .shared }
     @State private var query = ""
     @State private var copiedID: UUID?
+    @State private var addingToDictionary: DictationHistory.Entry?
 
     private var filtered: [DictationHistory.Entry] {
         let needle = query.trimmingCharacters(in: .whitespaces)
@@ -42,6 +43,9 @@ struct HistoryPage: View {
             .card()
             Text(retentionNote).font(.system(size: 12)).foregroundStyle(palette.secondaryText)
         }
+        .sheet(item: $addingToDictionary) { entry in
+            AddToDictionarySheet(entry: entry).environment(\.palette, palette)
+        }
     }
 
     private func row(_ entry: DictationHistory.Entry, last: Bool) -> some View {
@@ -72,6 +76,14 @@ struct HistoryPage: View {
                 Button(copiedID == entry.id ? "Copied" : "Copy") { copy(entry) }
                     .buttonStyle(.themedSmall)
                 Button {
+                    addingToDictionary = entry
+                } label: {
+                    Image(systemName: "character.book.closed").font(.system(size: 12))
+                }
+                .buttonStyle(.themedSmall)
+                .help("Add to Dictionary")
+                .accessibilityLabel("Add to Dictionary")
+                Button {
                     history.remove(entry)
                 } label: {
                     Image(systemName: "trash").font(.system(size: 12))
@@ -88,6 +100,7 @@ struct HistoryPage: View {
         }
         .contextMenu {
             Button("Copy") { copy(entry) }
+            Button("Add to Dictionary…") { addingToDictionary = entry }
             Button("Delete", role: .destructive) { history.remove(entry) }
         }
     }

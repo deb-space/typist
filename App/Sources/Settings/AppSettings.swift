@@ -80,10 +80,24 @@ final class AppSettings {
         didSet { store((try? JSONEncoder().encode(replacements)) ?? Data(), "replacements") }
     }
 
-    /// Dictionary terms as a hint for speech recognition.
+    /// How many times each dictionary entry was applied, by entry id.
+    var dictionaryUses: [UUID: Int] {
+        didSet { store((try? JSONEncoder().encode(dictionaryUses)) ?? Data(), "dictionaryUses") }
+    }
+
+    func recordUses(_ uses: [UUID: Int]) {
+        guard !uses.isEmpty else { return }
+        dictionaryUses.merge(uses, uniquingKeysWith: +)
+    }
+
+    /// Dictionary terms (not snippets) as a hint for speech recognition.
     var recognitionPrompt: String? {
-        let terms = Array(Set(replacements.map { $0.to.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }))
-            .sorted()
+        let terms = Array(
+            Set(
+                replacements.filter { $0.kind == .term }.map { $0.to.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty })
+        )
+        .sorted()
         return terms.isEmpty ? nil : terms.joined(separator: ", ")
     }
 
@@ -112,6 +126,9 @@ final class AppSettings {
         replacements =
             defaults.data(forKey: "replacements").flatMap { try? JSONDecoder().decode([Replacement].self, from: $0) }
             ?? []
+        dictionaryUses =
+            defaults.data(forKey: "dictionaryUses").flatMap { try? JSONDecoder().decode([UUID: Int].self, from: $0) }
+            ?? [:]
     }
 
     private func store(_ value: Any, _ key: String) {

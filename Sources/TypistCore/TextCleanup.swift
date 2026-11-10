@@ -3,17 +3,36 @@
 
 import Foundation
 
-/// A user's correction: what the model writes, and what it should be.
+/// An entry of the personal dictionary: what the model writes, and what it should be.
 public struct Replacement: Codable, Hashable, Sendable, Identifiable {
+    public enum Kind: String, Codable, Sendable, CaseIterable {
+        /// A word or name to spell right. Also given to speech recognition as a hint.
+        case term
+        /// A short phrase that expands into longer text. Not given to speech recognition.
+        case snippet
+    }
+
     public var id: UUID
-    /// Matched as whole words, ignoring case. May be several words.
+    public var kind: Kind
+    /// Matched as whole words, ignoring case. May be several words. A term may leave it empty
+    /// and only serve as a hint.
     public var from: String
     public var to: String
 
-    public init(id: UUID = UUID(), from: String, to: String) {
+    public init(id: UUID = UUID(), kind: Kind = .term, from: String, to: String) {
         self.id = id
+        self.kind = kind
         self.from = from
         self.to = to
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        // Entries saved before snippets existed have no kind.
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .term
+        from = try container.decode(String.self, forKey: .from)
+        to = try container.decode(String.self, forKey: .to)
     }
 
     var isUsable: Bool {
@@ -40,12 +59,21 @@ public struct TextCleanup: Sendable {
     }
 
     public func apply(to text: String) -> String {
+        applyCountingUses(to: text).text
+    }
+
+    /// Like ``apply(to:)``, and also reports how many times each dictionary entry matched.
+    public func applyCountingUses(to text: String) -> (text: String, uses: [UUID: Int]) {
         var result = text
         if removesPhantomPhrases { result = Self.removePhantomPhrases(result) }
         if removesFillers { result = Self.removeFillers(result) }
         if removesStutters { result = Self.removeStutters(result) }
-        result = Self.applyReplacements(replacements.filter(\.isUsable), to: result)
-        return Self.tidy(result)
+        result = Self.tidy(result)
+        // The dictionary goes last, so its text is inserted exactly as written: tidying would
+        // turn "iPhone" at the start into "IPhone" and "gmail.com" into "gmail.Com".
+        var uses: [UUID: Int] = [:]
+        result = Self.applyReplacements(replacements.filter(\.isUsable), to: result, uses: &uses)
+        return (result, uses)
     }
 
     // MARK: - Phantom phrases
@@ -67,40 +95,38 @@ public struct TextCleanup: Sendable {
         "subtitles by the amara.org community",
     ]
 
-    /// Removes phantom phrases when they make up a whole sentence of the text.
+    /// Removes phantom phrases when they make up a whole sentence of the text. Text without
+    /// them is returned untouched.
     static func removePhantomPhrases(_ text: String) -> String {
-        sentences(of: text)
-            .filter { sentence in
-                let key = sentence.lowercased()
-                    .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
-                    .replacingOccurrences(of: "  ", with: " ")
-                return !phantomPhrases.contains(key)
-            }
-            .joined(separator: " ")
+        let parts = sentences(of: text)
+        let kept = parts.filter { sentence in
+            let key = sentence.lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+                .replacingOccurrences(of: "  ", with: " ")
+            return !phantomPhrases.contains(key)
+        }
+        return kept.count == parts.count ? text : kept.joined(separator: " ")
     }
 
-    /// Splits after `.`, `!`, `?` and `…`, keeping the punctuation with its sentence.
+    /// Splits after `.`, `!`, `?` and `…` that end a sentence: followed by whitespace or the end
+    /// of the text, so "gmail.com" and "v1.2" stay whole.
     static func sentences(of text: String) -> [String] {
         var result: [String] = []
         var current = ""
-        for character in text {
+        let characters = Array(text)
+        for (index, character) in characters.enumerated() {
             current.append(character)
-            if ".!?…".contains(character) {
+            let atEnd = index + 1 == characters.count
+            let nextIsSpace = !atEnd && characters[index + 1].isWhitespace
+            let nextIsTerminator = !atEnd && ".!?…".contains(characters[index + 1])
+            if ".!?…".contains(character), atEnd || nextIsSpace, !nextIsTerminator {
                 let trimmed = current.trimmingCharacters(in: .whitespaces)
-                if !trimmed.isEmpty, trimmed.rangeOfCharacter(from: .letters) != nil {
-                    result.append(trimmed)
-                    current = ""
-                }
+                if !trimmed.isEmpty { result.append(trimmed) }
+                current = ""
             }
         }
         let rest = current.trimmingCharacters(in: .whitespaces)
-        if !rest.isEmpty {
-            if rest.rangeOfCharacter(from: .letters) == nil, let last = result.popLast() {
-                result.append(last + rest)
-            } else {
-                result.append(rest)
-            }
-        }
+        if !rest.isEmpty { result.append(rest) }
         return result
     }
 
@@ -138,16 +164,24 @@ public struct TextCleanup: Sendable {
 
     // MARK: - Replacements
 
-    static func applyReplacements(_ replacements: [Replacement], to text: String) -> String {
+    static func applyReplacements(_ replacements: [Replacement], to text: String, uses: inout [UUID: Int]) -> String {
         // Longer phrases first, so "docker compose" wins over "docker".
-        replacements.sorted { $0.from.count > $1.from.count }.reduce(text) { text, replacement in
+        var result = text
+        for replacement in replacements.sorted(by: { $0.from.count > $1.from.count }) {
             let words = replacement.from.trimmingCharacters(in: .whitespaces)
                 .split(whereSeparator: \.isWhitespace)
                 .map { NSRegularExpression.escapedPattern(for: String($0)) }
             let pattern = "(?i)(?<![\\p{L}\\p{N}])" + words.joined(separator: "\\s+") + "(?![\\p{L}\\p{N}])"
-            let template = NSRegularExpression.escapedTemplate(for: replacement.to.trimmingCharacters(in: .whitespaces))
-            return text.replacingOccurrences(of: pattern, with: template, options: .regularExpression)
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(result.startIndex..., in: result)
+            let count = regex.numberOfMatches(in: result, range: range)
+            guard count > 0 else { continue }
+            uses[replacement.id, default: 0] += count
+            let template = NSRegularExpression.escapedTemplate(
+                for: replacement.to.trimmingCharacters(in: .whitespaces))
+            result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: template)
         }
+        return result
     }
 
     // MARK: - Tidy
@@ -171,20 +205,26 @@ public struct TextCleanup: Sendable {
         return capitalizingSentenceStarts(result)
     }
 
+    /// Uppercases the first letter after ". ", "! " or "? ". A period without a space after it
+    /// (gmail.com, v1.2) does not end a sentence.
     private static func capitalizingSentenceStarts(_ text: String) -> String {
+        enum State { case inSentence, afterTerminator, armed }
         var result = ""
-        var capitalizeNext = false
+        var state = State.inSentence
         for character in text {
-            if capitalizeNext, character.isLetter {
+            switch state {
+            case .armed where character.isLetter:
                 result += character.uppercased()
-                capitalizeNext = false
+                state = .inSentence
                 continue
+            case .afterTerminator:
+                state = character.isWhitespace ? .armed : .inSentence
+            case .armed where !character.isWhitespace:
+                state = .inSentence
+            default:
+                break
             }
-            if ".!?".contains(character) {
-                capitalizeNext = true
-            } else if !character.isWhitespace {
-                capitalizeNext = false
-            }
+            if ".!?".contains(character) { state = .afterTerminator }
             result.append(character)
         }
         return result

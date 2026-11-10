@@ -6,7 +6,7 @@ import Observation
 import SwiftUI
 
 enum MainSection: String, CaseIterable, Identifiable {
-    case home, history, models, meetings, settings, privacy
+    case home, history, dictionary, models, meetings, settings, privacy
 
     var id: Self { self }
 
@@ -14,6 +14,7 @@ enum MainSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: "Home"
         case .history: "History"
+        case .dictionary: "Dictionary"
         case .models: "Models"
         case .meetings: "Meetings"
         case .settings: "Settings"
@@ -25,6 +26,7 @@ enum MainSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: "Dictation is ready. Everything runs on this Mac."
         case .history: "Every dictation, in case insertion went to the wrong place."
+        case .dictionary: "Words Whisper should spell right, and phrases that expand into longer text."
         case .models: "Speech recognition on this Mac."
         case .meetings: "Coming soon."
         case .settings: "Appearance, shortcuts, recording and how text gets into apps."
@@ -36,6 +38,7 @@ enum MainSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: "house"
         case .history: "clock.arrow.circlepath"
+        case .dictionary: "character.book.closed"
         case .models: "square.stack.3d.up"
         case .meetings: "video"
         case .settings: "gearshape"
@@ -101,6 +104,7 @@ struct MainWindowView: View {
         switch section {
         case .home: HomePage()
         case .history: HistoryPage()
+        case .dictionary: DictionaryPage()
         case .models: ModelsPage()
         case .meetings: MeetingsPage()
         case .settings: SettingsPage()
