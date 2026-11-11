@@ -10,9 +10,11 @@ struct HomePage: View {
     private var hotkey: HotkeyController { .shared }
     private var history: DictationHistory { .shared }
     @State private var tryIt = ""
+    @State private var missingPermissions: [String] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            if !missingPermissions.isEmpty { permissionWarning }
             statusCard
             VStack(alignment: .leading, spacing: 8) {
                 Text("Try it here")
@@ -31,6 +33,12 @@ struct HomePage: View {
             if showsGlobeTip { globeTip }
             recent
         }
+        .task {
+            while !Task.isCancelled {
+                missingPermissions = PermissionRow.current().filter { $0.required && !$0.granted }.map(\.name)
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
     private var statusCard: some View {
@@ -47,12 +55,16 @@ struct HomePage: View {
                     Keycap("fn")
                     Text("in any app and speak, release to insert.")
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Hold fn in any app and speak, release to insert.")
                 HStack(spacing: 6) {
                     Text("For long dictation press")
                     Keycap("fn")
                     Text("+")
                     Keycap("Space")
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("For long dictation press fn plus Space")
                 Text(dictation.modelStatusText + " · runs on this Mac · nothing leaves it")
                     .font(.system(size: 13))
                     .foregroundStyle(palette.secondaryText)
@@ -87,7 +99,7 @@ struct HomePage: View {
 
     private var globeTip: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "globe").foregroundStyle(palette.outside).padding(.top, 2)
+            Image(systemName: "globe").foregroundStyle(palette.secondaryText).padding(.top, 2)
             VStack(alignment: .leading, spacing: 6) {
                 Text("A quick tap on fn switches your keyboard layout").font(.system(size: 14, weight: .semibold))
                 Text(
@@ -108,8 +120,26 @@ struct HomePage: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(palette.outside.opacity(0.10)))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.outside.opacity(0.35)))
+        .card()
+    }
+
+    private var permissionWarning: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.danger)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Typist can’t dictate yet").font(.system(size: 14, weight: .semibold))
+                Text("Not allowed: " + missingPermissions.joined(separator: ", "))
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.text.opacity(0.85))
+            }
+            Spacer()
+            Button("Open Privacy") { MainWindowRouter.shared.selection = .privacy }
+                .buttonStyle(.themed)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(palette.danger.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.danger.opacity(0.4)))
     }
 
     private var recent: some View {
@@ -175,7 +205,18 @@ struct MeetingsPage: View {
         }
         .font(.system(size: 14))
         .padding(28)
-        .frame(maxWidth: 640, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .card(radius: 14)
     }
+}
+
+#Preview("Home · Dark Blue") {
+    ScrollView {
+        HomePage().padding(44)
+    }
+    .frame(width: 760, height: 720)
+    .background(ThemePalette.darkBlue.window)
+    .foregroundStyle(ThemePalette.darkBlue.text)
+    .environment(\.palette, .darkBlue)
+    .preferredColorScheme(.dark)
 }

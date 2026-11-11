@@ -53,8 +53,11 @@ struct HistoryPage: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.date, format: .dateTime.day().month().hour().minute())
                     .foregroundStyle(palette.text.opacity(0.85))
-                Text([entry.app, entry.language?.uppercased()].compactMap { $0 }.joined(separator: " · "))
-                    .foregroundStyle(palette.secondaryText)
+                Text(
+                    [entry.app, entry.language == usualLanguage ? nil : entry.language?.uppercased()]
+                        .compactMap { $0 }.joined(separator: " · ")
+                )
+                .foregroundStyle(palette.secondaryText)
             }
             .font(.system(size: 12))
             .frame(width: 120, alignment: .leading)
@@ -103,6 +106,24 @@ struct HistoryPage: View {
             Button("Add to Dictionary…") { addingToDictionary = entry }
             Button("Delete", role: .destructive) { history.remove(entry) }
         }
+        // VoiceOver reads the dictation once, with its actions, instead of a row of anonymous
+        // "Copy" buttons.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            [entry.date.formatted(date: .abbreviated, time: .shortened), entry.app, entry.text]
+                .compactMap { $0 }.joined(separator: ", ")
+        )
+        .accessibilityActions {
+            Button("Copy") { copy(entry) }
+            Button("Add to Dictionary") { addingToDictionary = entry }
+            Button("Delete") { history.remove(entry) }
+        }
+    }
+
+    /// The language most dictations are in; only other languages get a tag.
+    private var usualLanguage: String? {
+        Dictionary(grouping: history.entries.compactMap(\.language), by: { $0 })
+            .max { $0.value.count < $1.value.count }?.key
     }
 
     private func copy(_ entry: DictationHistory.Entry) {

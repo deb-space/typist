@@ -133,11 +133,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             InsertionSpikeAutomation.runIfRequested()
             TranscriptionCheck.runIfRequested()
             MainWindowSnapshots.runIfRequested()
-            // Spike runs launch extra copies of the app; only a normal launch takes the hotkey.
-            if !ProcessInfo.processInfo.arguments.contains(where: {
-                $0.hasPrefix("--spike") || $0.hasPrefix("--overlay") || $0.hasPrefix("--transcribe")
-                    || $0.hasPrefix("--window")
-            }) {
+            // Spike runs and Xcode previews launch extra copies of the app; only a normal launch
+            // takes the hotkey and loads the model.
+            let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            if !isPreview,
+                !ProcessInfo.processInfo.arguments.contains(where: {
+                    $0.hasPrefix("--spike") || $0.hasPrefix("--overlay") || $0.hasPrefix("--transcribe")
+                        || $0.hasPrefix("--window")
+                })
+            {
                 HotkeyController.shared.start()
                 DictationController.shared.prepareModel()
             }

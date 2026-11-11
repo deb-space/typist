@@ -9,17 +9,17 @@ struct SpeechModel: Identifiable, Equatable {
     let variant: String
     let name: String
     let detail: String
-    let downloadSize: String
+    let downloadBytes: Int64
 
     var id: String { variant }
 
     static let all: [SpeechModel] = [
         SpeechModel(
             variant: WhisperKitTranscriber.defaultVariant, name: "Whisper large-v3-turbo · compressed",
-            detail: "99 languages · about 1 s for a 6 s phrase", downloadSize: "627 MB"),
+            detail: "99 languages · about 1 s for a 6 s phrase", downloadBytes: 627_000_000),
         SpeechModel(
             variant: "openai_whisper-large-v3-v20240930", name: "Whisper large-v3-turbo · full precision",
-            detail: "Slightly more accurate, slower to load", downloadSize: "1.6 GB"),
+            detail: "Slightly more accurate, slower to load", downloadBytes: 1_620_000_000),
     ]
 
     static func named(_ variant: String) -> SpeechModel {
@@ -31,6 +31,11 @@ struct SpeechModel: Identifiable, Equatable {
     var folder: URL { WhisperKitTranscriber.folder(of: variant, in: Self.directory) }
 
     var isDownloaded: Bool { FileManager.default.fileExists(atPath: folder.path) }
+
+    /// When the model was downloaded, the only time Typist goes online.
+    var downloadedAt: Date? {
+        try? folder.resourceValues(forKeys: [.creationDateKey]).creationDate
+    }
 
     /// Bytes on disk, or nil if not downloaded.
     var sizeOnDisk: Int64? {

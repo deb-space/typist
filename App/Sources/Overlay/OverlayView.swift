@@ -87,7 +87,7 @@ struct OverlayView: View {
         case .fallback:
             Image(systemName: "exclamationmark.circle")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(OverlayPalette.outside)
+                .foregroundStyle(OverlayPalette.secondary)
             Text("Used on-device model").font(.system(size: 12)).foregroundStyle(OverlayPalette.text)
         case .needsMicrophone:
             Image(systemName: "mic.slash")

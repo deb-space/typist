@@ -13,15 +13,20 @@ struct PrivacyPage: View {
     @State private var permissions: [PermissionRow] = []
     @State private var confirmingDelete = false
 
+    private var lastNetworkUse: String {
+        guard let date = SpeechModel.all.compactMap(\.downloadedAt).max() else { return "None yet" }
+        return "Last: model download, " + date.formatted(.dateTime.day().month())
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             CardSection {
                 CardRow(
-                    "What leaves this Mac",
-                    "Audio and text stay here. A Local Only switch comes with your own endpoints.",
+                    "Network use",
+                    "Audio and text never leave this Mac. Typist only goes online to download the models you choose.",
                     divider: false
                 ) {
-                    Text("Model downloads only").foregroundStyle(palette.secondaryText)
+                    Text(lastNetworkUse).foregroundStyle(palette.secondaryText)
                 }
             }
 
@@ -86,6 +91,8 @@ struct PermissionRow: Identifiable {
     let status: String
     let granted: Bool
     let settingsAnchor: String
+    /// Dictation does not work without it.
+    var required = true
 
     var id: String { name }
 
@@ -110,7 +117,7 @@ struct PermissionRow: Identifiable {
                 granted: HotkeyService.hasInputMonitoring, settingsAnchor: "Privacy_ListenEvent"),
             PermissionRow(
                 name: "System Audio Recording", purpose: "For meetings: the other side of the call",
-                status: "Asked later", granted: false, settingsAnchor: "Privacy"),
+                status: "Asked later", granted: false, settingsAnchor: "Privacy", required: false),
         ]
     }
 }

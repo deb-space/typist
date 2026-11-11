@@ -205,7 +205,10 @@ final class DictationController {
         model.isHandsFree = isHandsFree
         model.isRemote = false
         model.startedAt = Date()
-        model.showsHints = settings.showHints
+        // How to finish and cancel is shown during the first few dictations only.
+        let routineHints = settings.showHints && settings.hintsShown < AppSettings.hintLimit
+        model.showsHints = routineHints
+        if routineHints { settings.hintsShown += 1 }
         isOverlayShown = true
         if settings.playSounds { NSSound(named: "Tink")?.play() }
         overlay.show(.listening, hint: isHandsFree ? handsFreeHint : "Release fn to insert · esc to cancel")
@@ -245,7 +248,7 @@ final class DictationController {
         // Whisper invents text on silence ("Thank you."), so skip it entirely.
         guard heardVoice else {
             flow = Task {
-                overlay.show(.cancelled, hint: "Didn’t hear anything")
+                showException(.cancelled, hint: "Didn’t hear anything")
                 try? await Task.sleep(for: .milliseconds(1300))
                 guard !Task.isCancelled else { return }
                 hideOverlay()
@@ -277,7 +280,7 @@ final class DictationController {
                 await insert(transcript, raw: raw)
             } catch {
                 logger.error("transcription failed: \(String(describing: error), privacy: .public)")
-                overlay.show(.cancelled, hint: "Couldn’t transcribe — \(String(describing: error))")
+                showException(.cancelled, hint: "Couldn’t transcribe — \(String(describing: error))")
                 try? await Task.sleep(for: .seconds(3))
                 hideOverlay()
             }
@@ -306,6 +309,12 @@ final class DictationController {
         isRecording = false
     }
 
+    /// Something unusual happened: always explain it, even after routine hints stopped.
+    private func showException(_ phase: OverlayModel.Phase, hint: String) {
+        overlay.model.showsHints = true
+        overlay.show(phase, hint: hint)
+    }
+
     private func hideOverlay() {
         isOverlayShown = false
         overlay.hide()
@@ -315,7 +324,7 @@ final class DictationController {
 
     private func insert(_ transcript: Transcript, raw: String) async {
         guard !transcript.text.isEmpty else {
-            overlay.show(.cancelled, hint: "Nothing recognized")
+            showException(.cancelled, hint: "Nothing recognized")
             try? await Task.sleep(for: .milliseconds(1500))
             hideOverlay()
             return
@@ -330,7 +339,7 @@ final class DictationController {
         if FocusInspector.isSecureInputEnabled {
             // A password field: typing is blocked, so leave the text where the user can get it.
             copyToClipboard(transcript.text)
-            overlay.show(.copied, hint: "Secure field — not typed")
+            showException(.copied, hint: "Password field — typing is blocked")
             try? await Task.sleep(for: .seconds(3))
         } else {
             _ = await TextInserter.insert(

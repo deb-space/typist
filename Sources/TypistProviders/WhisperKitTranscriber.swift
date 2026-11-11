@@ -77,8 +77,12 @@ public actor WhisperKitTranscriber: TranscriptionProvider {
             skipSpecialTokens: true, withoutTimestamps: true)
         if let prompt, !prompt.isEmpty, let tokenizer = whisper.tokenizer {
             // Whisper's "previous text" prompt: terms in it are recognized more often.
-            options.promptTokens = tokenizer.encode(text: " " + prompt)
-                .filter { $0 < tokenizer.specialTokens.specialTokenBegin }
+            // Whisper keeps at most about half its 448-token context for the prompt; anything longer
+            // is cut by the model anyway, so cut it here, keeping the start (the most used terms).
+            options.promptTokens = Array(
+                tokenizer.encode(text: " " + prompt)
+                    .filter { $0 < tokenizer.specialTokens.specialTokenBegin }
+                    .prefix(200))
         }
         let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
         let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)

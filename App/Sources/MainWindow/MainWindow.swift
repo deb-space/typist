@@ -24,10 +24,10 @@ enum MainSection: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .home: "Dictation is ready. Everything runs on this Mac."
+        case .home: "Hold fn in any app and speak. Everything runs on this Mac."
         case .history: "Every dictation, in case insertion went to the wrong place."
         case .dictionary: "Words Whisper should spell right, and phrases that expand into longer text."
-        case .models: "Speech recognition on this Mac."
+        case .models: "Which speech model Typist runs on this Mac."
         case .meetings: "Coming soon."
         case .settings: "Appearance, shortcuts, recording and how text gets into apps."
         case .privacy: "What is stored, for how long, and which permissions Typist has."

@@ -32,6 +32,8 @@ struct SettingsPage: View {
                         Text("+").foregroundStyle(palette.secondaryText)
                         Keycap("Space")
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("fn plus Space")
                 }
                 CardRow("Cancel", "Only while recording; otherwise esc goes to the app", divider: false) {
                     Keycap("esc")
@@ -39,7 +41,7 @@ struct SettingsPage: View {
             }
 
             CardSection("Recording") {
-                CardRow("Stop hands-free after silence", "Paused while the microphone switches devices") {
+                CardRow("Stop hands-free after silence", "How long Typist waits after you stop talking") {
                     HStack(spacing: 12) {
                         Slider(value: $settings.autostopSeconds, in: 2...15, step: 1)
                             .frame(width: 200)
@@ -51,7 +53,7 @@ struct SettingsPage: View {
                 }
                 CardRow(
                     "Microphone",
-                    "Choosing a microphone comes later. Switching to AirPods mid-sentence loses about 5 seconds"
+                    "Uses the input selected in macOS"
                 ) {
                     Text("Follows the system input").foregroundStyle(palette.secondaryText)
                 }
@@ -101,7 +103,10 @@ struct SettingsPage: View {
                         options: AppSettings.OverlayPosition.allCases.map { ($0, $0.title) },
                         selection: $settings.overlayPosition)
                 }
-                CardRow("Show hints", "The line under the capsule") {
+                CardRow(
+                    "Show hints",
+                    "How to finish and cancel, during the first 5 dictations. Problems are always explained"
+                ) {
                     ThemedToggle(label: "Show hints", isOn: $settings.showHints)
                 }
                 CardRow("Sounds on start and finish", divider: false) {

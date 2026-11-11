@@ -65,6 +65,9 @@ final class AppSettings {
     var autostopSeconds: Double { didSet { store(autostopSeconds, "autostopSeconds") } }
     var restoreClipboard: Bool { didSet { store(restoreClipboard, "restoreClipboard") } }
     var showHints: Bool { didSet { store(showHints, "showHints") } }
+    /// How many dictations have shown the routine hints; they stop after ``hintLimit``.
+    var hintsShown: Int { didSet { store(hintsShown, "hintsShown") } }
+    static let hintLimit = 5
     var playSounds: Bool { didSet { store(playSounds, "playSounds") } }
     var overlayPosition: OverlayPosition { didSet { store(overlayPosition.rawValue, "overlayPosition") } }
     /// nil detects the language.
@@ -92,12 +95,12 @@ final class AppSettings {
 
     /// Dictionary terms (not snippets) as a hint for speech recognition.
     var recognitionPrompt: String? {
-        let terms = Array(
-            Set(
-                replacements.filter { $0.kind == .term }.map { $0.to.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty })
-        )
-        .sorted()
+        // Most used first: Whisper's prompt has room for about 200 tokens, the rest is cut off.
+        var seen: Set<String> = []
+        let terms = replacements.filter { $0.kind == .term }
+            .sorted { (dictionaryUses[$0.id] ?? 0, $1.to) > (dictionaryUses[$1.id] ?? 0, $0.to) }
+            .map { $0.to.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
         return terms.isEmpty ? nil : terms.joined(separator: ", ")
     }
 
@@ -114,6 +117,7 @@ final class AppSettings {
         autostopSeconds = defaults.object(forKey: "autostopSeconds") as? Double ?? 5
         restoreClipboard = defaults.object(forKey: "restoreClipboard") as? Bool ?? true
         showHints = defaults.object(forKey: "showHints") as? Bool ?? true
+        hintsShown = defaults.integer(forKey: "hintsShown")
         playSounds = defaults.object(forKey: "playSounds") as? Bool ?? false
         overlayPosition = defaults.string(forKey: "overlayPosition").flatMap(OverlayPosition.init) ?? .bottom
         let storedLanguage = defaults.string(forKey: "language") ?? ""

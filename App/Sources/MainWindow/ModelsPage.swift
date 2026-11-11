@@ -13,7 +13,7 @@ struct ModelsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            CardSection("Speech recognition on this Mac") {
+            CardSection("Speech models") {
                 ForEach(SpeechModel.all) { model in
                     row(model)
                 }
@@ -67,7 +67,7 @@ struct ModelsPage: View {
         let detail = [
             model.detail,
             size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
-                ?? "\(model.downloadSize) download",
+                ?? ByteCountFormatter.string(fromByteCount: model.downloadBytes, countStyle: .file) + " download",
         ]
         .joined(separator: " · ")
         return VStack(alignment: .leading, spacing: 0) {
@@ -79,7 +79,7 @@ struct ModelsPage: View {
                         Button("Use") { dictation.selectModel(model) }.buttonStyle(.themed)
                         Button("Delete") { delete(model) }.buttonStyle(.themedDestructive)
                     } else {
-                        Button("Download and Use") { dictation.selectModel(model) }.buttonStyle(.themedPrimary)
+                        Button("Download and Use") { dictation.selectModel(model) }.buttonStyle(.themed)
                     }
                     if size != nil {
                         Button {
