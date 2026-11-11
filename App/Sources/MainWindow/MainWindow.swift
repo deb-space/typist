@@ -80,6 +80,9 @@ struct MainWindowView: View {
                 .padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // A new scroll view per page, so switching pages starts at the top instead of
+            // keeping the previous page's scroll position.
+            .id(router.selection)
             .scrollContentBackground(.hidden)
             .background(palette.window)
         }
