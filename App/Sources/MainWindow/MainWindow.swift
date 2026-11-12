@@ -61,30 +61,44 @@ final class MainWindowRouter {
 struct MainWindowView: View {
     private var router: MainWindowRouter { .shared }
     private var palette: ThemePalette { AppSettings.shared.theme.palette }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The new page fades in rising slightly; the old one fades out quicker, so the two barely
+    /// overlap. With Reduce Motion, only the fade.
+    private var pageTransition: AnyTransition {
+        .asymmetric(
+            insertion: reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 14)),
+            removal: .opacity.animation(.easeOut(duration: 0.25)))
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             Sidebar()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(router.selection.title).font(.system(size: 24, weight: .semibold))
-                        Text(router.selection.subtitle)
-                            .font(.system(size: 14))
-                            .foregroundStyle(palette.secondaryText)
+            ZStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(router.selection.title).font(.system(size: 24, weight: .semibold))
+                            Text(router.selection.subtitle)
+                                .font(.system(size: 14))
+                                .foregroundStyle(palette.secondaryText)
+                        }
+                        page(router.selection)
                     }
-                    page(router.selection)
+                    .padding(.horizontal, 44)
+                    .padding(.top, 36)
+                    .padding(.bottom, 48)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 44)
-                .padding(.top, 36)
-                .padding(.bottom, 48)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // A new scroll view per page, so switching pages starts at the top instead of
+                // keeping the previous page's scroll position.
+                .id(router.selection)
+                .transition(pageTransition)
+                .scrollContentBackground(.hidden)
             }
-            // A new scroll view per page, so switching pages starts at the top instead of
-            // keeping the previous page's scroll position.
-            .id(router.selection)
-            .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(palette.window)
+            .animation(.smooth(duration: 0.5), value: router.selection)
         }
         .ignoresSafeArea()
         .foregroundStyle(palette.text)
@@ -118,6 +132,8 @@ struct MainWindowView: View {
 
 private struct Sidebar: View {
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var highlight
     private var router: MainWindowRouter { .shared }
     private var dictation: DictationController { .shared }
 
@@ -163,18 +179,27 @@ private struct Sidebar: View {
                     .font(.system(size: 14))
                     .padding(.horizontal, 10)
                     .frame(height: 34)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(selected ? palette.selection : .clear))
+                    // The shared highlight below takes this row's frame when it is selected.
+                    .matchedGeometryEffect(id: section, in: highlight, isSource: true)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
+            .animation(.easeOut(duration: 0.3), value: router.selection)
 
             Spacer()
             Text("Version 0.1.0 · GPL-3.0")
                 .font(.system(size: 12))
                 .foregroundStyle(palette.secondaryText)
                 .padding(.horizontal, 8)
+        }
+        .background {
+            // One highlight for all rows that slides from the old item to the new one, instead of
+            // the new item lighting up at once while the old one fades.
+            RoundedRectangle(cornerRadius: 8).fill(palette.selection)
+                .matchedGeometryEffect(id: router.selection, in: highlight, isSource: false)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.5), value: router.selection)
         }
         // Room for the window buttons, which sit over the sidebar.
         .padding(.top, 50)
