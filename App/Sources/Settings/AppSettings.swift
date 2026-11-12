@@ -78,6 +78,8 @@ final class AppSettings {
     var theme: Theme { didSet { store(theme.rawValue, "theme") } }
     /// Rule-based cleanup: fillers, stutters and phrases Whisper invents.
     var cleanupEnabled: Bool { didSet { store(cleanupEnabled, "cleanupEnabled") } }
+    /// Spoken "new line" and "new paragraph" insert line breaks.
+    var lineBreakCommands: Bool { didSet { store(lineBreakCommands, "lineBreakCommands") } }
     /// Cleanup with a local language model after the rules. Off skips the model entirely, and it
     /// is not downloaded or loaded.
     var aiCleanupEnabled: Bool { didSet { store(aiCleanupEnabled, "aiCleanupEnabled") } }
@@ -117,7 +119,7 @@ final class AppSettings {
     var cleanup: TextCleanup {
         TextCleanup(
             removesFillers: cleanupEnabled, removesStutters: cleanupEnabled, removesPhantomPhrases: cleanupEnabled,
-            replacements: replacements)
+            formatsLineBreaks: lineBreakCommands, replacements: replacements)
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -137,6 +139,7 @@ final class AppSettings {
         dismissedGlobeTip = defaults.bool(forKey: "dismissedGlobeTip")
         theme = defaults.string(forKey: "theme").flatMap(Theme.init) ?? .dark
         cleanupEnabled = defaults.object(forKey: "cleanupEnabled") as? Bool ?? true
+        lineBreakCommands = defaults.object(forKey: "lineBreakCommands") as? Bool ?? true
         aiCleanupEnabled = defaults.object(forKey: "aiCleanupEnabled") as? Bool ?? true
         cleanupModelRepo = defaults.string(forKey: "cleanupModelRepo") ?? CleanupModel.defaultModel.repo
         replacements =

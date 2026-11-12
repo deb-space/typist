@@ -71,9 +71,12 @@ struct SettingsPage: View {
                 ) {
                     ThemedToggle(label: "Clean up text", isOn: $settings.cleanupEnabled)
                 }
+                CardRow("Line breaks by voice", "Say “new line” or “new paragraph” on its own, with a short pause") {
+                    ThemedToggle(label: "Line breaks by voice", isOn: $settings.lineBreakCommands)
+                }
                 CardRow(
                     "Clean up with AI",
-                    "Applies self-corrections like “five, no, six” and fixes grammar with a language model on this Mac. History keeps both versions."
+                    "Applies self-corrections like “five, no, six”, fixes grammar and turns “first…, second…” into a list, with a language model on this Mac. History keeps both versions."
                 ) {
                     ThemedToggle(
                         label: "Clean up with AI",

@@ -46,15 +46,18 @@ public struct TextCleanup: Sendable {
     public var removesFillers: Bool
     public var removesStutters: Bool
     public var removesPhantomPhrases: Bool
+    /// Turns spoken "new line" and "new paragraph" into line breaks.
+    public var formatsLineBreaks: Bool
     public var replacements: [Replacement]
 
     public init(
         removesFillers: Bool = true, removesStutters: Bool = true, removesPhantomPhrases: Bool = true,
-        replacements: [Replacement] = []
+        formatsLineBreaks: Bool = true, replacements: [Replacement] = []
     ) {
         self.removesFillers = removesFillers
         self.removesStutters = removesStutters
         self.removesPhantomPhrases = removesPhantomPhrases
+        self.formatsLineBreaks = formatsLineBreaks
         self.replacements = replacements
     }
 
@@ -73,7 +76,10 @@ public struct TextCleanup: Sendable {
         if removesPhantomPhrases { result = Self.removePhantomPhrases(result) }
         if removesFillers { result = Self.removeFillers(result) }
         if removesStutters { result = Self.removeStutters(result) }
-        return Self.tidy(result)
+        result = Self.tidy(result)
+        // After tidying, which would capitalize and trim around the breaks differently.
+        if formatsLineBreaks { result = Self.applyLineBreakCommands(result) }
+        return result
     }
 
     /// The last step, after the rules and any AI cleanup, so the dictionary's text is inserted
@@ -137,6 +143,54 @@ public struct TextCleanup: Sendable {
         let rest = current.trimmingCharacters(in: .whitespaces)
         if !rest.isEmpty { result.append(rest) }
         return result
+    }
+
+    // MARK: - Line breaks
+
+    /// Spoken commands and what they insert.
+    static let lineBreakCommands: [(phrase: String, insert: String)] = [
+        ("new paragraph", "\n\n"), ("next paragraph", "\n\n"), ("new line", "\n"), ("next line", "\n"),
+    ]
+
+    /// Replaces "new line" and "new paragraph" said on their own: at the start or end, or set off by
+    /// punctuation, which is how Whisper writes a pause. "A new line of products" stays text.
+    /// The comma Whisper put before the command and any punctuation after it go; a period, "?" or
+    /// "!" before it ends the sentence and stays.
+    static func applyLineBreakCommands(_ text: String) -> String {
+        let phrases = lineBreakCommands.map { $0.phrase.replacingOccurrences(of: " ", with: "\\s+") }
+        let pattern = "(?i)(?<![\\p{L}\\p{N}])(" + phrases.joined(separator: "|") + ")(?![\\p{L}\\p{N}])"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let pause = CharacterSet(charactersIn: ",.;:")
+        var result = text
+        // From the end, so earlier ranges stay valid.
+        for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            let spoken = result[range].lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            guard let insert = lineBreakCommands.first(where: { $0.phrase == spoken })?.insert else { continue }
+            // Widen over the pause before and after the command.
+            var start = range.lowerBound
+            while start > result.startIndex, result[result.index(before: start)].isWhitespace {
+                start = result.index(before: start)
+            }
+            let before = start > result.startIndex ? result[result.index(before: start)] : nil
+            var end = range.upperBound
+            while end < result.endIndex, result[end].unicodeScalars.allSatisfy(pause.contains) || result[end] == " " {
+                end = result.index(after: end)
+            }
+            let after = end < result.endIndex ? result[end] : nil
+            let standsAlone =
+                before == nil || after == nil || before.map { ",.;:!?…\n".contains($0) } == true
+                || result[range.upperBound..<end].contains { ",.;:".contains($0) }
+            guard standsAlone else { continue }
+            // A comma before the command is the pause; a period ends the sentence and stays.
+            if let before, ",;".contains(before) {
+                start = result.index(before: start)
+            }
+            var tail = String(result[end...])
+            if let first = tail.first, first.isLowercase { tail = first.uppercased() + tail.dropFirst() }
+            result = String(result[..<start]) + insert + tail
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Fillers

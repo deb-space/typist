@@ -56,6 +56,32 @@ import Testing
                 == .droppedWords)
     }
 
+    @Test func acceptsAList() {
+        #expect(
+            AICleanup.check(
+                source: "Buy first milk, second bread and third eggs",
+                output: "Buy:\n1. Milk\n2. Bread\n3. Eggs", glossary: []) == nil)
+        #expect(
+            AICleanup.check(
+                source: "I have two things to say, the price is too high and the deadline is too close",
+                output: "I have two things to say:\n1. The price is too high\n2. The deadline is too close",
+                glossary: [])
+                == .format)
+        #expect(AICleanup.isList("- milk\n- bread"))
+        #expect(!AICleanup.isList("Milk.\nBread.\n1. Eggs"))
+    }
+
+    @Test func keepsLineBreaksTheSpeakerAskedFor() {
+        #expect(
+            AICleanup.check(
+                source: "Thanks.\n\nBest regards, Anna", output: "Thanks. Best regards, Anna.", glossary: [])
+                == .format)
+        #expect(
+            AICleanup.check(
+                source: "Thanks.\n\nbest regards anna", output: "Thanks.\n\nBest regards, Anna", glossary: [])
+                == nil)
+    }
+
     @Test func rejectsNewLinesAndCode() {
         #expect(
             AICleanup.check(source: "shopping list milk bread eggs", output: "Shopping list:\nmilk bread", glossary: [])

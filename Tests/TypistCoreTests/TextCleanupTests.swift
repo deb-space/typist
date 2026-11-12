@@ -84,3 +84,32 @@ import Testing
         #expect(cleanup.apply(to: "Эм, я я тут.") == "Эм, я я тут.")
     }
 }
+
+@Suite struct LineBreakCommandTests {
+    let cleanup = TextCleanup()
+
+    @Test(arguments: [
+        ("Thanks for the update. New paragraph. Best regards, Anna", "Thanks for the update.\n\nBest regards, Anna"),
+        ("Milk, new line, bread, new line, eggs", "Milk\nBread\nEggs"),
+        ("Are you coming? New line. Let me know", "Are you coming?\nLet me know"),
+        ("Hi team, next paragraph we ship on Monday.", "Hi team\n\nWe ship on Monday."),
+        ("New line. Start here", "Start here"),
+        ("See you tomorrow. New line", "See you tomorrow."),
+    ])
+    func insertsBreaks(input: String, expected: String) {
+        #expect(cleanup.apply(to: input) == expected)
+    }
+
+    @Test(arguments: [
+        "We need a new line of products for spring.",
+        "The next paragraph explains the plan.",
+    ])
+    func keepsTheWordsInASentence(input: String) {
+        #expect(cleanup.apply(to: input) == input)
+    }
+
+    @Test func canBeTurnedOff() {
+        let plain = TextCleanup(formatsLineBreaks: false)
+        #expect(plain.apply(to: "Milk, new line, bread") == "Milk, new line, bread")
+    }
+}
