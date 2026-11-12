@@ -6,6 +6,7 @@ import AppKit
 import OSLog
 import Observation
 import TypistAudio
+import TypistCore
 
 /// One recorded meeting: a folder with the other side's track, the microphone track (in
 /// segments when the input device changed) and `meeting.json`.
@@ -22,6 +23,9 @@ struct MeetingRecord: Codable, Identifiable, Equatable {
     /// Whether the tracks were compressed to AAC after the meeting.
     var compressed = false
     var log: [String] = []
+    /// Names you gave the speakers, by ``MeetingTranscript/Speaker/rawValue``. Kept here rather
+    /// than in the transcript, so they survive retranscribing.
+    var speakerNames: [String: String]?
 
     /// The folder name, set when loading.
     var id = ""
@@ -33,6 +37,7 @@ struct MeetingRecord: Codable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case startedAt, endedAt, sourceName, sourceBundleID, outputDevice, inputDevice, tracks, compressed, log
+        case speakerNames
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id && lhs.endedAt == rhs.endedAt }
@@ -90,6 +95,8 @@ final class MeetingRecorder {
     func start() async {
         guard !isRecording else { return }
         error = nil
+        // Events from an earlier meeting must not end up in this one's log.
+        pendingLog = []
         heardOtherSide = false
         let app = AudioApp.running().first { $0.bundleID == sourceBundleID }
         let start = Date()
@@ -204,6 +211,8 @@ final class MeetingRecorder {
             save(record, in: folder)
             isFinishing = false
             reload()
+            record.id = folder.lastPathComponent
+            MeetingTranscriber.shared.transcribe(record)
         }
     }
 
@@ -230,16 +239,27 @@ final class MeetingRecorder {
         Self.directory.appending(path: record.id, directoryHint: .isDirectory)
     }
 
-    /// The other side's track, or the first track there is.
-    func mainTrack(of record: MeetingRecord) -> URL? {
-        let track = record.tracks.first { $0.name == "system" } ?? record.tracks.first
-        return track.map { folder(of: record).appending(path: $0.file) }
-    }
-
     func delete(_ record: MeetingRecord) throws {
         guard record.id != folder?.lastPathComponent else { return }
         try FileManager.default.removeItem(at: folder(of: record))
         reload()
+    }
+
+    /// Names a speaker of a recorded meeting; an empty name brings back the default one.
+    func rename(_ speaker: MeetingTranscript.Speaker, to name: String, in id: String) {
+        guard let index = recordings.firstIndex(where: { $0.id == id }) else { return }
+        var record = recordings[index]
+        var names = record.speakerNames ?? [:]
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        names[speaker.rawValue] = name.isEmpty || name == speaker.name ? nil : name
+        record.speakerNames = names.isEmpty ? nil : names
+        recordings[index] = record
+        save(record, in: folder(of: record))
+    }
+
+    /// Names given to speakers in other meetings, most recent meeting first, to suggest when naming.
+    func earlierSpeakerNames(excluding id: String) -> [[String: String]] {
+        recordings.filter { $0.id != id }.compactMap(\.speakerNames)
     }
 
     func sizeOnDisk(of record: MeetingRecord) -> Int64? {

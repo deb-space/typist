@@ -57,3 +57,31 @@ import Testing
         }
     }
 }
+
+@Suite struct AudioFileSamplesTests {
+    @Test func convertsALongStereoFileTo16kMono() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appending(path: "system.caf")
+        let format = try #require(
+            AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 2, interleaved: false))
+        let writer = try TrackWriter(name: "system", url: url, format: format)
+        // 10 s in 1 s buffers: several of the loader's pieces.
+        for _ in 0..<10 {
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000))
+            buffer.frameLength = 48_000
+            for channel in 0..<2 {
+                for frame in 0..<48_000 {
+                    buffer.floatChannelData?[channel][frame] = 0.3 * sin(2 * .pi * 300 * Float(frame) / 48_000)
+                }
+            }
+            writer.write(buffer, hostTime: nil)
+        }
+        writer.close()
+
+        let samples = try AudioFileSamples.load(url)
+        #expect(abs(samples.count - 160_000) < 1_600)
+        #expect((samples.map(abs).max() ?? 0) > 0.2)
+    }
+}

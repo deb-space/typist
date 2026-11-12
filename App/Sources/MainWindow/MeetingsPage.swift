@@ -10,8 +10,19 @@ struct MeetingsPage: View {
     @Bindable private var recorder = MeetingRecorder.shared
     @State private var askingConsent = false
     @State private var error: String?
+    /// The meeting shown in full, by id.
+    @State private var opened: String?
+    private var transcriber: MeetingTranscriber { .shared }
 
     var body: some View {
+        if let record = recorder.recordings.first(where: { $0.id == opened }) {
+            MeetingDetailView(record: record) { opened = nil }
+        } else {
+            list
+        }
+    }
+
+    private var list: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
                 CardSection("Record a meeting") {
@@ -131,20 +142,15 @@ struct MeetingsPage: View {
         let detail = [
             Self.duration(record.seconds), record.sourceName ?? "All system audio", size,
             record.endedAt == nil && record.id != MeetingRecorder.shared.currentID ? "interrupted" : nil,
+            transcriptionNote(record),
         ]
         .compactMap { $0 }
         .joined(separator: " · ")
         return CardRow(record.startedAt.formatted(date: .abbreviated, time: .shortened), detail, divider: !last) {
             HStack(spacing: 8) {
-                if let track = recorder.mainTrack(of: record) {
-                    Button {
-                        NSWorkspace.shared.open(track)
-                    } label: {
-                        Image(systemName: "play.fill").font(.system(size: 11))
-                    }
-                    .buttonStyle(.themed)
-                    .help("Play the other side’s track")
-                    .accessibilityLabel("Play")
+                if record.id != MeetingRecorder.shared.currentID {
+                    Button("Open") { opened = record.id }
+                        .buttonStyle(.themed)
                 }
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([recorder.folder(of: record)])
@@ -168,6 +174,16 @@ struct MeetingsPage: View {
                 .accessibilityLabel("Delete")
                 .disabled(record.id == MeetingRecorder.shared.currentID)
             }
+        }
+    }
+
+    private func transcriptionNote(_ record: MeetingRecord) -> String? {
+        switch transcriber.status[record.id] {
+        case .queued, .loadingModel: return "waiting to transcribe"
+        case .transcribing(let fraction): return "transcribing \(Int(fraction * 100))%"
+        case .findingSpeakers: return "finding speakers"
+        case .failed: return "transcription failed"
+        case nil: return transcriber.transcript(of: record) == nil ? nil : "transcribed"
         }
     }
 

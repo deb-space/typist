@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 typist contributors
 
@@ -20,6 +20,9 @@ let package = Package(
         // Local language models for text cleanup (MIT), and their tokenizers (Apache-2.0).
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3"),
         .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.4.0"),
+        // Speaker diarization (Apache-2.0) with pyannote models on the Neural Engine. Only the
+        // Diarizer trait: no text-processing binary, no speech synthesis.
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.3", traits: ["Diarizer"]),
     ],
     targets: [
         // Domain types and service protocols. No dependencies on other modules.
@@ -35,6 +38,7 @@ let package = Package(
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
+                .product(name: "FluidAudio", package: "FluidAudio"),
             ]),
         // SQLite storage, audio files, Keychain.
         .target(name: "TypistStorage", dependencies: ["TypistCore"]),

@@ -160,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             InsertionSpikeAutomation.runIfRequested()
             TranscriptionCheck.runIfRequested()
             CleanupCheck.runIfRequested()
+            MeetingCheck.runIfRequested()
             MainWindowSnapshots.runIfRequested()
             // Spike runs and Xcode previews launch extra copies of the app; only a normal launch
             // takes the hotkey and loads the model.
@@ -167,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !isPreview,
                 !ProcessInfo.processInfo.arguments.contains(where: {
                     $0.hasPrefix("--spike") || $0.hasPrefix("--overlay") || $0.hasPrefix("--transcribe")
-                        || $0.hasPrefix("--cleanup")
+                        || $0.hasPrefix("--cleanup") || $0.hasPrefix("--meeting")
                         || $0.hasPrefix("--window")
                 })
             {
