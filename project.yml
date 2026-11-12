@@ -55,3 +55,4 @@ schemes:
     test:
       targets:
         - package: TypistKit/TypistCoreTests
+        - package: TypistKit/TypistAudioTests

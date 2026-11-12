@@ -28,7 +28,7 @@ enum MainSection: String, CaseIterable, Identifiable {
         case .history: "Every dictation, in case insertion went to the wrong place."
         case .dictionary: "Words Whisper should spell right, and phrases that expand into longer text."
         case .models: "Which speech model Typist runs on this Mac."
-        case .meetings: "Coming soon."
+        case .meetings: "Your microphone and the call’s sound, on two tracks."
         case .settings: "Appearance, shortcuts, recording and how text gets into apps."
         case .privacy: "What is stored, for how long, and which permissions Typist has."
         }
@@ -167,13 +167,9 @@ private struct Sidebar: View {
                         Text(section.title)
                             .foregroundStyle(selected ? palette.text : palette.text.opacity(0.85))
                         Spacer()
-                        if section == .meetings {
-                            Text("Soon")
-                                .font(.system(size: 11))
-                                .foregroundStyle(palette.secondaryText)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(palette.control))
+                        if section == .meetings, MeetingRecorder.shared.isRecording {
+                            Circle().fill(palette.danger).frame(width: 7, height: 7)
+                                .accessibilityLabel("Recording")
                         }
                     }
                     .font(.system(size: 14))

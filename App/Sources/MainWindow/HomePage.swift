@@ -185,31 +185,6 @@ struct HomePage: View {
     }
 }
 
-struct MeetingsPage: View {
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Meeting notes are on the way").font(.system(size: 17, weight: .semibold))
-            Text("Typist will record your calls without a bot joining them, on this Mac.")
-                .foregroundStyle(palette.text.opacity(0.85))
-            VStack(alignment: .leading, spacing: 10) {
-                Text("· Two tracks, you and everyone else, from Zoom, Meet, Teams and FaceTime")
-                Text("· Speaker names that it remembers from one meeting to the next")
-                Text("· Summary, decisions and action items, with the audio kept to check any line")
-            }
-            .foregroundStyle(palette.text.opacity(0.85))
-            Text("Recording both sides is already tested; transcription and speakers are next.")
-                .font(.system(size: 13))
-                .foregroundStyle(palette.secondaryText)
-        }
-        .font(.system(size: 14))
-        .padding(28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card(radius: 14)
-    }
-}
-
 #Preview("Home · Dark Blue") {
     ScrollView {
         HomePage().padding(44)

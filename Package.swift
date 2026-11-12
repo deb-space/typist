@@ -42,6 +42,7 @@ let package = Package(
         .target(name: "TypistInput", dependencies: ["TypistCore"]),
 
         .testTarget(name: "TypistCoreTests", dependencies: ["TypistCore"]),
+        .testTarget(name: "TypistAudioTests", dependencies: ["TypistAudio"]),
     ],
     swiftLanguageModes: [.v6]
 )

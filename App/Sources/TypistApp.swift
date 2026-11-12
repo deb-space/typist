@@ -8,8 +8,11 @@ struct TypistApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
 
     var body: some Scene {
-        MenuBarExtra("Typist", systemImage: "waveform") {
+        MenuBarExtra {
             MenuContent()
+        } label: {
+            // A recording meeting must never be forgotten.
+            Image(systemName: MeetingRecorder.shared.isRecording ? "record.circle" : "waveform")
         }
 
         Window("Typist", id: MainWindowRouter.windowID) {
@@ -38,6 +41,7 @@ private struct MenuContent: View {
     private var hotkey: HotkeyController { .shared }
     private var dictation: DictationController { .shared }
     private var history: DictationHistory { .shared }
+    private var meetings: MeetingRecorder { .shared }
 
     static func preview(_ text: String) -> String {
         let line = text.replacingOccurrences(of: "\n", with: " ")
@@ -55,6 +59,16 @@ private struct MenuContent: View {
             openMain(.home)
         }
         .keyboardShortcut("o")
+
+        if meetings.isRecording {
+            Button("Stop Meeting Recording") {
+                meetings.stop()
+            }
+        } else {
+            Button("Record Meeting…") {
+                openMain(.meetings)
+            }
+        }
 
         Divider()
 
@@ -134,6 +148,11 @@ private struct MenuContent: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        // Close the files so a meeting recorded until quitting stays playable.
+        MainActor.assumeIsolated { MeetingRecorder.shared.stopForQuit() }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             AudioSpikeAutomation.runIfRequested()
