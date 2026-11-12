@@ -64,15 +64,24 @@ public struct TextCleanup: Sendable {
 
     /// Like ``apply(to:)``, and also reports how many times each dictionary entry matched.
     public func applyCountingUses(to text: String) -> (text: String, uses: [UUID: Int]) {
+        applyDictionary(to: applyRules(to: text))
+    }
+
+    /// The first step: phantom phrases, fillers, stutters, spacing and capitals.
+    public func applyRules(to text: String) -> String {
         var result = text
         if removesPhantomPhrases { result = Self.removePhantomPhrases(result) }
         if removesFillers { result = Self.removeFillers(result) }
         if removesStutters { result = Self.removeStutters(result) }
-        result = Self.tidy(result)
-        // The dictionary goes last, so its text is inserted exactly as written: tidying would
-        // turn "iPhone" at the start into "IPhone" and "gmail.com" into "gmail.Com".
+        return Self.tidy(result)
+    }
+
+    /// The last step, after the rules and any AI cleanup, so the dictionary's text is inserted
+    /// exactly as written: tidying would turn "iPhone" at the start into "IPhone" and
+    /// "gmail.com" into "gmail.Com".
+    public func applyDictionary(to text: String) -> (text: String, uses: [UUID: Int]) {
         var uses: [UUID: Int] = [:]
-        result = Self.applyReplacements(replacements.filter(\.isUsable), to: result, uses: &uses)
+        let result = Self.applyReplacements(replacements.filter(\.isUsable), to: text, uses: &uses)
         return (result, uses)
     }
 

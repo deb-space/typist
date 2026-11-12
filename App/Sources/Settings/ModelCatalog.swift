@@ -39,7 +39,12 @@ struct SpeechModel: Identifiable, Equatable {
 
     /// Bytes on disk, or nil if not downloaded.
     var sizeOnDisk: Int64? {
-        guard isDownloaded,
+        guard isDownloaded else { return nil }
+        return Self.allocatedSize(of: folder)
+    }
+
+    static func allocatedSize(of folder: URL) -> Int64? {
+        guard
             let files = FileManager.default.enumerator(
                 at: folder, includingPropertiesForKeys: [.totalFileAllocatedSizeKey])
         else { return nil }
@@ -49,5 +54,57 @@ struct SpeechModel: Identifiable, Equatable {
                 (try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey]))?.totalFileAllocatedSize ?? 0)
         }
         return total
+    }
+}
+
+/// Language models that can clean up dictated text on this Mac.
+struct CleanupModel: Identifiable, Equatable {
+    enum Badge { case recommended, bestQuality }
+
+    let repo: String
+    /// The reviewed commit; a new revision is a code change.
+    let revision: String
+    let name: String
+    let detail: String
+    let downloadBytes: Int64
+    /// Measured peak while cleaning up a dictation.
+    let memoryBytes: Int64
+    let badge: Badge?
+
+    var id: String { repo }
+
+    static let all: [CleanupModel] = [
+        CleanupModel(
+            repo: "mlx-community/gemma-4-e4b-it-4bit", revision: "475b9088d29754a3379866cf5aeb6b41acd313c2",
+            name: "Gemma 4 E4B", detail: "Google · about 0.2 s per phrase", downloadBytes: 5_180_000_000,
+            memoryBytes: 4_930_000_000, badge: .recommended),
+        CleanupModel(
+            repo: "mlx-community/Qwen3.5-4B-MLX-4bit", revision: "32f3e8ecf65426fc3306969496342d504bfa13f3",
+            name: "Qwen3.5 4B", detail: "Alibaba · lightest, more cautious edits", downloadBytes: 3_060_000_000,
+            memoryBytes: 3_420_000_000, badge: nil),
+        CleanupModel(
+            repo: "mlx-community/Qwen3.5-9B-MLX-4bit", revision: "938d8919941c6e7efd3c7150eff7fe9d12afa631",
+            name: "Qwen3.5 9B", detail: "Alibaba · best with long, tangled phrases · about 0.3 s per phrase",
+            downloadBytes: 5_980_000_000, memoryBytes: 5_890_000_000, badge: .bestQuality),
+    ]
+
+    static let defaultModel = all[0]
+
+    static func named(_ repo: String) -> CleanupModel {
+        all.first { $0.repo == repo } ?? defaultModel
+    }
+
+    var folder: URL { MLXTextCleaner.folder(of: repo, in: SpeechModel.directory) }
+
+    var isDownloaded: Bool { MLXTextCleaner.isDownloaded(repo, revision: revision, in: SpeechModel.directory) }
+
+    /// Whether this Mac has comfortably more memory than the model needs next to Whisper and apps.
+    var fitsThisMac: Bool {
+        Int64(ProcessInfo.processInfo.physicalMemory) >= memoryBytes * 2 + 4_000_000_000
+    }
+
+    var sizeOnDisk: Int64? {
+        guard isDownloaded else { return nil }
+        return SpeechModel.allocatedSize(of: folder)
     }
 }

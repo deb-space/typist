@@ -20,12 +20,19 @@ final class DictationController {
     }
 
     private(set) var modelStatus: ModelStatus = .idle
+    /// The AI cleanup model. Stays idle while AI cleanup is off.
+    private(set) var cleanupStatus: ModelStatus = .idle
     private(set) var isRecording = false
 
     @ObservationIgnored private var transcriber = WhisperKitTranscriber(
         variant: AppSettings.shared.modelVariant, modelsDirectory: SpeechModel.directory)
     /// Increases when the model changes, so late state updates from the old one are ignored.
     @ObservationIgnored private var modelGeneration = 0
+    @ObservationIgnored private var cleaner = DictationController.makeCleaner()
+    @ObservationIgnored private var cleanerGeneration = 0
+    @ObservationIgnored private var cleanerUnload: Task<Void, Never>?
+    /// The cleanup model gives its memory back after this long without dictation.
+    private let cleanerIdleUnload: Duration = .seconds(15 * 60)
     @ObservationIgnored private var recorder: DictationRecorder?
     @ObservationIgnored private var flow: Task<Void, Never>?
     @ObservationIgnored private var silenceWatch: Task<Void, Never>?
@@ -63,6 +70,8 @@ final class DictationController {
 
     // MARK: - Model
 
+    /// Loads the speech model, then the cleanup model: dictation works as soon as Whisper is
+    /// ready, and the two downloads don't share the connection.
     func prepareModel() {
         let transcriber = transcriber
         let generation = modelGeneration
@@ -70,6 +79,7 @@ final class DictationController {
             try? await transcriber.prepare { state in
                 Task { @MainActor in DictationController.shared.update(state, generation: generation) }
             }
+            prepareCleaner()
         }
     }
 
@@ -102,6 +112,121 @@ final class DictationController {
         }
     }
 
+    // MARK: - AI cleanup model
+
+    var currentCleanupModel: CleanupModel { CleanupModel.named(settings.cleanupModelRepo) }
+
+    var cleanupStatusText: String {
+        let name = currentCleanupModel.name
+        switch cleanupStatus {
+        case .idle: return currentCleanupModel.isDownloaded ? "\(name): not loaded" : "\(name): not downloaded"
+        case .downloading(let fraction): return "\(name): downloading \(Int(fraction * 100))%"
+        case .loading: return "\(name): loading…"
+        case .ready: return "\(name): ready"
+        case .failed: return "\(name): failed"
+        }
+    }
+
+    private static func makeCleaner() -> MLXTextCleaner {
+        let model = CleanupModel.named(AppSettings.shared.cleanupModelRepo)
+        return MLXTextCleaner(repo: model.repo, revision: model.revision, modelsDirectory: SpeechModel.directory)
+    }
+
+    /// Downloads the cleanup model if needed and loads it, when AI cleanup is on.
+    func prepareCleaner() {
+        guard settings.aiCleanupEnabled else { return }
+        let cleaner = cleaner
+        let generation = cleanerGeneration
+        Task {
+            try? await cleaner.prepare { state in
+                Task { @MainActor in DictationController.shared.updateCleaner(state, generation: generation) }
+            }
+        }
+        scheduleCleanerUnload()
+    }
+
+    /// Turning AI cleanup off frees the model's memory; turning it on loads it again.
+    func aiCleanupChanged() {
+        if settings.aiCleanupEnabled {
+            prepareCleaner()
+        } else {
+            cleanerUnload?.cancel()
+            let cleaner = cleaner
+            Task { await cleaner.unload() }
+            cleanupStatus = .idle
+        }
+    }
+
+    /// Switches to another cleanup model, downloading it if needed, and turns AI cleanup on.
+    func selectCleanupModel(_ model: CleanupModel) {
+        if model.repo != settings.cleanupModelRepo {
+            let old = cleaner
+            Task { await old.unload() }
+            settings.cleanupModelRepo = model.repo
+            cleanerGeneration += 1
+            cleaner = Self.makeCleaner()
+            cleanupStatus = .idle
+        }
+        settings.aiCleanupEnabled = true
+        prepareCleaner()
+    }
+
+    func deleteCleanupModel(_ model: CleanupModel) throws {
+        guard model.repo != settings.cleanupModelRepo else { return }
+        try FileManager.default.removeItem(at: model.folder)
+    }
+
+    private func updateCleaner(_ state: MLXTextCleaner.State, generation: Int) {
+        guard generation == cleanerGeneration, settings.aiCleanupEnabled else { return }
+        switch state {
+        case .idle: cleanupStatus = .idle
+        case .downloading(let fraction): cleanupStatus = .downloading(fraction)
+        case .loading: cleanupStatus = .loading
+        case .ready: cleanupStatus = .ready
+        case .failed(let message):
+            cleanupStatus = .failed(message)
+            logger.error("cleanup model failed: \(message, privacy: .public)")
+        }
+    }
+
+    private func scheduleCleanerUnload() {
+        cleanerUnload?.cancel()
+        let delay = cleanerIdleUnload
+        cleanerUnload = Task {
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await cleaner.unload()
+            if cleanupStatus == .ready { cleanupStatus = .idle }
+            logger.info("cleanup model unloaded after idle")
+        }
+    }
+
+    /// The AI version of `text`, or nil when AI cleanup is off, its model is still downloading
+    /// or it failed. A loaded-but-idle model is loaded again, which takes a few seconds.
+    private func cleanWithAI(_ text: String) async -> (text: String, rejection: AICleanup.Rejection?)? {
+        guard settings.aiCleanupEnabled, !text.isEmpty, currentCleanupModel.isDownloaded else { return nil }
+        let cleaner = cleaner
+        let generation = cleanerGeneration
+        let glossary = settings.dictionaryTerms
+        // Long dictations take longer; past this the text without AI is inserted.
+        let timeout = Duration.seconds(4 + text.count / 100)
+        let start = Date()
+        do {
+            try await cleaner.prepare { state in
+                Task { @MainActor in DictationController.shared.updateCleaner(state, generation: generation) }
+            }
+            let output = try await cleaner.clean(text, glossary: glossary, timeout: timeout)
+            let rejection = AICleanup.check(source: text, output: output, glossary: glossary)
+            logger.info(
+                "AI cleanup in \(Date().timeIntervalSince(start), format: .fixed(precision: 2)) s, \(rejection.map { "rejected: \($0.rawValue)" } ?? "accepted", privacy: .public)"
+            )
+            return (output, rejection)
+        } catch {
+            logger.error("AI cleanup failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
     // MARK: - Recording
 
     /// fn went down. Start the microphone without showing anything, so the first word is kept
@@ -111,6 +236,8 @@ final class DictationController {
         guard recorder == nil, AVAudioApplication.shared.recordPermission == .granted else { return }
         flow?.cancel()
         startRecorder()
+        // Load the cleanup model while the user speaks, if it was unloaded after idle.
+        if settings.aiCleanupEnabled, currentCleanupModel.isDownloaded { prepareCleaner() }
     }
 
     func start(handsFree: Bool) {
@@ -269,15 +396,28 @@ final class DictationController {
                 overlay.model.hint = "Transcribing on this Mac"
                 var transcript = try await transcriber.transcribe(
                     samples, language: settings.language, prompt: settings.recognitionPrompt)
-                let raw = transcript.text
-                let cleaned = settings.cleanup.applyCountingUses(to: raw)
-                transcript.text = cleaned.text
-                settings.recordUses(cleaned.uses)
-                guard !Task.isCancelled else { return }
                 logger.info(
                     "transcribed \(transcript.audioSeconds, format: .fixed(precision: 1)) s in \(transcript.processingSeconds, format: .fixed(precision: 2)) s, \(transcript.wordCount) words, \(transcript.language ?? "?", privacy: .public)"
                 )
-                await insert(transcript, raw: raw)
+                let raw = transcript.text
+                let cleanup = settings.cleanup
+                let ruled = cleanup.applyRules(to: raw)
+                let withoutAI = cleanup.applyDictionary(to: ruled)
+                settings.recordUses(withoutAI.uses)
+                transcript.text = withoutAI.text
+                var ai: AIVersion?
+                if settings.aiCleanupEnabled, currentCleanupModel.isDownloaded {
+                    overlay.model.hint = "Cleaning up on this Mac"
+                    if let result = await cleanWithAI(ruled) {
+                        ai = AIVersion(
+                            text: cleanup.applyDictionary(to: result.text).text, model: currentCleanupModel.name,
+                            rejection: result.rejection)
+                        if result.rejection == nil, let text = ai?.text { transcript.text = text }
+                    }
+                    scheduleCleanerUnload()
+                }
+                guard !Task.isCancelled else { return }
+                await insert(transcript, raw: raw, withoutAI: withoutAI.text, ai: ai)
             } catch {
                 logger.error("transcription failed: \(String(describing: error), privacy: .public)")
                 showException(.cancelled, hint: "Couldn’t transcribe — \(String(describing: error))")
@@ -322,7 +462,14 @@ final class DictationController {
 
     // MARK: - Insertion
 
-    private func insert(_ transcript: Transcript, raw: String) async {
+    /// What AI cleanup made of a dictation.
+    struct AIVersion {
+        var text: String
+        var model: String
+        var rejection: AICleanup.Rejection?
+    }
+
+    private func insert(_ transcript: Transcript, raw: String, withoutAI: String, ai: AIVersion?) async {
         guard !transcript.text.isEmpty else {
             showException(.cancelled, hint: "Nothing recognized")
             try? await Task.sleep(for: .milliseconds(1500))
@@ -333,7 +480,8 @@ final class DictationController {
         history.add(
             .init(
                 date: Date(), text: transcript.text, rawText: raw == transcript.text ? nil : raw, app: app,
-                language: transcript.language))
+                language: transcript.language, withoutAI: ai == nil ? nil : withoutAI, aiText: ai?.text,
+                aiModel: ai?.model, aiRejection: ai?.rejection))
         let timing = String(format: "%.1f s", transcript.processingSeconds)
 
         if FocusInspector.isSecureInputEnabled {

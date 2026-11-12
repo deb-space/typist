@@ -78,6 +78,11 @@ final class AppSettings {
     var theme: Theme { didSet { store(theme.rawValue, "theme") } }
     /// Rule-based cleanup: fillers, stutters and phrases Whisper invents.
     var cleanupEnabled: Bool { didSet { store(cleanupEnabled, "cleanupEnabled") } }
+    /// Cleanup with a local language model after the rules. Off skips the model entirely, and it
+    /// is not downloaded or loaded.
+    var aiCleanupEnabled: Bool { didSet { store(aiCleanupEnabled, "aiCleanupEnabled") } }
+    /// The repository of the language model in use, see ``CleanupModel``.
+    var cleanupModelRepo: String { didSet { store(cleanupModelRepo, "cleanupModelRepo") } }
     /// The personal dictionary.
     var replacements: [Replacement] {
         didSet { store((try? JSONEncoder().encode(replacements)) ?? Data(), "replacements") }
@@ -93,14 +98,19 @@ final class AppSettings {
         dictionaryUses.merge(uses, uniquingKeysWith: +)
     }
 
-    /// Dictionary terms (not snippets) as a hint for speech recognition.
-    var recognitionPrompt: String? {
-        // Most used first: Whisper's prompt has room for about 200 tokens, the rest is cut off.
+    /// Dictionary terms (not snippets), most used first, without duplicates.
+    var dictionaryTerms: [String] {
         var seen: Set<String> = []
-        let terms = replacements.filter { $0.kind == .term }
+        return replacements.filter { $0.kind == .term }
             .sorted { (dictionaryUses[$0.id] ?? 0, $1.to) > (dictionaryUses[$1.id] ?? 0, $0.to) }
             .map { $0.to.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+    }
+
+    /// Dictionary terms as a hint for speech recognition. Most used first: Whisper's prompt has
+    /// room for about 200 tokens, the rest is cut off.
+    var recognitionPrompt: String? {
+        let terms = dictionaryTerms
         return terms.isEmpty ? nil : terms.joined(separator: ", ")
     }
 
@@ -127,6 +137,8 @@ final class AppSettings {
         dismissedGlobeTip = defaults.bool(forKey: "dismissedGlobeTip")
         theme = defaults.string(forKey: "theme").flatMap(Theme.init) ?? .dark
         cleanupEnabled = defaults.object(forKey: "cleanupEnabled") as? Bool ?? true
+        aiCleanupEnabled = defaults.object(forKey: "aiCleanupEnabled") as? Bool ?? true
+        cleanupModelRepo = defaults.string(forKey: "cleanupModelRepo") ?? CleanupModel.defaultModel.repo
         replacements =
             defaults.data(forKey: "replacements").flatMap { try? JSONDecoder().decode([Replacement].self, from: $0) }
             ?? []

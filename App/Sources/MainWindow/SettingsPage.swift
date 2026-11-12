@@ -67,11 +67,28 @@ struct SettingsPage: View {
             CardSection("Text cleanup") {
                 CardRow(
                     "Clean up text",
-                    "Removes “um” and “э”, stutters like “я я”, and phrases Whisper invents, like “Продолжение следует…”",
-                    divider: false
+                    "Removes “um” and “э”, stutters like “я я”, and phrases Whisper invents, like “Продолжение следует…”"
                 ) {
                     ThemedToggle(label: "Clean up text", isOn: $settings.cleanupEnabled)
                 }
+                CardRow(
+                    "Clean up with AI",
+                    "Applies self-corrections like “five, no, six” and fixes grammar with a language model on this Mac. History keeps both versions."
+                ) {
+                    ThemedToggle(
+                        label: "Clean up with AI",
+                        isOn: Binding(
+                            get: { settings.aiCleanupEnabled },
+                            set: {
+                                settings.aiCleanupEnabled = $0
+                                DictationController.shared.aiCleanupChanged()
+                            }))
+                }
+                CardRow("AI model", aiModelDetail, divider: false) {
+                    Button("Choose Model") { MainWindowRouter.shared.selection = .models }
+                        .buttonStyle(.themed)
+                }
+                .opacity(settings.aiCleanupEnabled ? 1 : 0.5)
             }
 
             CardSection {
@@ -113,6 +130,21 @@ struct SettingsPage: View {
                     ThemedToggle(label: "Sounds on start and finish", isOn: $settings.playSounds)
                 }
             }
+        }
+    }
+}
+
+extension SettingsPage {
+    private var aiModelDetail: String {
+        let dictation = DictationController.shared
+        let model = dictation.currentCleanupModel
+        guard settings.aiCleanupEnabled else { return "\(model.name) · off" }
+        switch dictation.cleanupStatus {
+        case .downloading(let fraction): return "\(model.name) · downloading \(Int(fraction * 100))%"
+        case .loading: return "\(model.name) · loading"
+        case .failed: return "\(model.name) · failed, see Models"
+        case .idle where !model.isDownloaded: return "\(model.name) · downloads after the speech model"
+        case .idle, .ready: return model.name
         }
     }
 }
@@ -165,4 +197,14 @@ private struct ThemeOption: View {
         .accessibilityLabel("\(theme.title) theme")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
+
+#Preview("Settings · Dark Blue") {
+    ScrollView {
+        SettingsPage().padding(44)
+    }
+    .frame(width: 860, height: 900)
+    .background(ThemePalette.darkBlue.window)
+    .foregroundStyle(ThemePalette.darkBlue.text)
+    .environment(\.palette, .darkBlue)
 }

@@ -6,16 +6,23 @@ import SwiftUI
 struct HistoryPage: View {
     @Environment(\.palette) private var palette
     private var history: DictationHistory { .shared }
+    /// Sample entries for previews, instead of the real history.
+    var sample: [DictationHistory.Entry]?
+    private var entries: [DictationHistory.Entry] { sample ?? history.entries }
     private var settings: AppSettings { .shared }
     @State private var query = ""
     @State private var copiedID: UUID?
     @State private var addingToDictionary: DictationHistory.Entry?
+    /// Entries switched away from the version that was inserted, by id: true shows the AI version.
+    @State private var showsAI: [UUID: Bool] = [:]
 
     private var filtered: [DictationHistory.Entry] {
         let needle = query.trimmingCharacters(in: .whitespaces)
-        guard !needle.isEmpty else { return history.entries }
-        return history.entries.filter {
-            $0.text.localizedCaseInsensitiveContains(needle) || ($0.app ?? "").localizedCaseInsensitiveContains(needle)
+        guard !needle.isEmpty else { return entries }
+        return entries.filter { entry in
+            [entry.text, entry.aiText, entry.withoutAI, entry.app].contains {
+                ($0 ?? "").localizedCaseInsensitiveContains(needle)
+            }
         }
     }
 
@@ -31,7 +38,7 @@ struct HistoryPage: View {
             }
             LazyVStack(spacing: 0) {
                 if filtered.isEmpty {
-                    Text(history.entries.isEmpty ? "No dictations yet." : "Nothing matches “\(query)”.")
+                    Text(entries.isEmpty ? "No dictations yet." : "Nothing matches “\(query)”.")
                         .foregroundStyle(palette.secondaryText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 28)
@@ -62,10 +69,18 @@ struct HistoryPage: View {
             .font(.system(size: 12))
             .frame(width: 120, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.text)
+                if entry.aiText != nil {
+                    versionPicker(entry)
+                }
+                Text(shownText(entry))
                     .font(.system(size: 14))
                     .lineSpacing(2)
                     .textSelection(.enabled)
+                if let rejection = entry.aiRejection, isShowingAI(entry) {
+                    Text("Not inserted: \(rejection.explanation.lowercasedFirst)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.secondaryText)
+                }
                 if let raw = entry.rawText {
                     Text("Heard: \(raw)")
                         .font(.system(size: 12))
@@ -103,6 +118,9 @@ struct HistoryPage: View {
         }
         .contextMenu {
             Button("Copy") { copy(entry) }
+            if entry.aiText != nil {
+                Button(isShowingAI(entry) ? "Show Without AI" : "Show With AI") { toggleVersion(entry) }
+            }
             Button("Add to Dictionary…") { addingToDictionary = entry }
             Button("Delete", role: .destructive) { history.remove(entry) }
         }
@@ -110,11 +128,17 @@ struct HistoryPage: View {
         // "Copy" buttons.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            [entry.date.formatted(date: .abbreviated, time: .shortened), entry.app, entry.text]
-                .compactMap { $0 }.joined(separator: ", ")
+            [
+                entry.date.formatted(date: .abbreviated, time: .shortened), entry.app,
+                entry.aiText == nil ? nil : (isShowingAI(entry) ? "with AI" : "without AI"), shownText(entry),
+            ]
+            .compactMap { $0 }.joined(separator: ", ")
         )
         .accessibilityActions {
             Button("Copy") { copy(entry) }
+            if entry.aiText != nil {
+                Button(isShowingAI(entry) ? "Show Without AI" : "Show With AI") { toggleVersion(entry) }
+            }
             Button("Add to Dictionary") { addingToDictionary = entry }
             Button("Delete") { history.remove(entry) }
         }
@@ -122,12 +146,61 @@ struct HistoryPage: View {
 
     /// The language most dictations are in; only other languages get a tag.
     private var usualLanguage: String? {
-        Dictionary(grouping: history.entries.compactMap(\.language), by: { $0 })
+        Dictionary(grouping: entries.compactMap(\.language), by: { $0 })
             .max { $0.value.count < $1.value.count }?.key
     }
 
+    // MARK: - Versions
+
+    private func isShowingAI(_ entry: DictationHistory.Entry) -> Bool {
+        showsAI[entry.id] ?? entry.usedAI
+    }
+
+    private func shownText(_ entry: DictationHistory.Entry) -> String {
+        guard let aiText = entry.aiText else { return entry.text }
+        return isShowingAI(entry) ? aiText : (entry.withoutAI ?? entry.text)
+    }
+
+    private func toggleVersion(_ entry: DictationHistory.Entry) {
+        showsAI[entry.id] = !isShowingAI(entry)
+    }
+
+    /// "With AI · Without AI", with the inserted version marked.
+    private func versionPicker(_ entry: DictationHistory.Entry) -> some View {
+        HStack(spacing: 2) {
+            ForEach([true, false], id: \.self) { ai in
+                let selected = isShowingAI(entry) == ai
+                let inserted = entry.usedAI == ai
+                Button {
+                    showsAI[entry.id] = ai
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(ai ? "With AI" : "Without AI")
+                        if inserted {
+                            Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold))
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(selected ? palette.text : palette.secondaryText)
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(selected ? palette.control : .clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(
+                    (ai ? "Cleaned up by \(entry.aiModel ?? "a language model")" : "Rules and your dictionary only")
+                        + (inserted ? " · this version was inserted" : ""))
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7).fill(palette.input))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(palette.inputBorder))
+        .padding(.bottom, 2)
+    }
+
     private func copy(_ entry: DictationHistory.Entry) {
-        DictationController.shared.copyToClipboard(entry.text)
+        DictationController.shared.copyToClipboard(shownText(entry))
         copiedID = entry.id
         Task {
             try? await Task.sleep(for: .seconds(1.5))
@@ -143,4 +216,33 @@ struct HistoryPage: View {
         case .never: "History is off: new dictations are not kept. Change it in Privacy."
         }
     }
+}
+
+extension String {
+    fileprivate var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
+}
+
+#Preview("History · Dark") {
+    let now = Date()
+    ScrollView {
+        HistoryPage(sample: [
+            DictationHistory.Entry(
+                date: now, text: "Let's meet on Wednesday at the office.",
+                rawText: "Let's meet on Tuesday, sorry, I mean Wednesday, at the office.", app: "Slack", language: "en",
+                withoutAI: "Let's meet on Tuesday, sorry, I mean Wednesday, at the office.",
+                aiText: "Let's meet on Wednesday at the office.", aiModel: "Gemma 4 E4B"),
+            DictationHistory.Entry(
+                date: now.addingTimeInterval(-300), text: "Write me an email to my e-mail", app: "Mail",
+                language: "en", withoutAI: "Write me an email to my e-mail", aiText: "Write me an email.",
+                aiModel: "Gemma 4 E4B", aiRejection: .droppedWords),
+            DictationHistory.Entry(
+                date: now.addingTimeInterval(-900), text: "Testing dictation through Typist", app: "Notes",
+                language: "en"),
+        ])
+        .padding(44)
+    }
+    .frame(width: 860, height: 520)
+    .background(ThemePalette.dark.window)
+    .foregroundStyle(ThemePalette.dark.text)
+    .environment(\.palette, .dark)
 }

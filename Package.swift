@@ -16,7 +16,10 @@ let package = Package(
     ],
     dependencies: [
         // Exact versions: dependencies are reviewed for license and behavior before each upgrade.
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "1.1.1")
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "1.1.1"),
+        // Local language models for text cleanup (MIT), and their tokenizers (Apache-2.0).
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3"),
+        .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.4.0"),
     ],
     targets: [
         // Domain types and service protocols. No dependencies on other modules.
@@ -26,7 +29,13 @@ let package = Package(
         // STT, LLM and diarization providers: local engines and external endpoints.
         .target(
             name: "TypistProviders",
-            dependencies: ["TypistCore", .product(name: "WhisperKit", package: "WhisperKit")]),
+            dependencies: [
+                "TypistCore",
+                .product(name: "WhisperKit", package: "WhisperKit"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ]),
         // SQLite storage, audio files, Keychain.
         .target(name: "TypistStorage", dependencies: ["TypistCore"]),
         // Text insertion into other apps and global hotkeys.

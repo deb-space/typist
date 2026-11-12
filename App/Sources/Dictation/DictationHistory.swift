@@ -3,6 +3,7 @@
 
 import Foundation
 import Observation
+import TypistCore
 
 /// Recent dictations, kept on this Mac only, so text is never lost when insertion goes wrong.
 @MainActor @Observable
@@ -16,6 +17,17 @@ final class DictationHistory {
         /// The app the text was inserted into.
         var app: String?
         var language: String?
+        /// The text after the rules and the dictionary, without AI cleanup. Set when AI cleanup ran.
+        var withoutAI: String?
+        /// The language model's version, inserted or not.
+        var aiText: String?
+        /// The name of the model that made ``aiText``.
+        var aiModel: String?
+        /// Why ``aiText`` was not inserted; nil when it was.
+        var aiRejection: AICleanup.Rejection?
+
+        /// Whether the inserted text is the AI version.
+        var usedAI: Bool { aiText != nil && aiRejection == nil }
     }
 
     static let shared = DictationHistory()
