@@ -108,7 +108,8 @@ final class MeetingTranscriber {
         try await transcriber.prepare { _ in }
 
         let folder = recorder.folder(of: record)
-        let system = record.tracks.first { $0.name == "system" }
+        // The call app's track, or the whole sound of an imported file.
+        let system = record.tracks.first { !$0.name.hasPrefix("microphone") }
         let microphone = record.tracks.filter { $0.name.hasPrefix("microphone") }
         let tracks = [system].compactMap { $0 } + microphone
         let total = max(1, tracks.reduce(0) { $0 + $1.secondsByFrames })
@@ -136,7 +137,8 @@ final class MeetingTranscriber {
             let offset = Self.offset(of: track, from: system)
             var words: [TimedText] = []
             let speakers: [MeetingTranscript.Speaker]
-            if track.name == "system" || systemSamples == nil {
+            let isOtherSide = track.name == system?.name
+            if isOtherSide || systemSamples == nil {
                 let result = try await transcriber.transcribeTimed(
                     samples, language: language, prompt: nil, words: true, onProgress: report)
                 detected = detected ?? result.language
@@ -144,7 +146,7 @@ final class MeetingTranscriber {
                     SpeechOnsets(samples: samples).aligning(result.segments)
                 }.value
                 whisper.append(.init(track: track.name, words: words.map { $0.shifted(by: offset) }))
-                if track.name == "system" {
+                if isOtherSide {
                     systemSamples = samples
                     status[id] = .findingSpeakers
                     speakers = await self.speakers(of: words, samples: samples)

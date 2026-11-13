@@ -4,6 +4,7 @@
 import AppKit
 import SwiftUI
 import TypistAudio
+import UniformTypeIdentifiers
 
 struct MeetingsPage: View {
     @Environment(\.palette) private var palette
@@ -12,6 +13,9 @@ struct MeetingsPage: View {
     @State private var error: String?
     /// The meeting shown in full, by id.
     @State private var opened: String?
+    @State private var choosingFiles = false
+    /// A file is being dragged over the list.
+    @State private var dropTargeted = false
     private var transcriber: MeetingTranscriber { .shared }
 
     var body: some View {
@@ -41,17 +45,62 @@ struct MeetingsPage: View {
                 .padding(.horizontal, 4)
             }
 
-            CardSection("Recordings") {
-                if recorder.recordings.isEmpty {
-                    Text("No meetings recorded yet.")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Recordings")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(palette.secondaryText)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
+                    Spacer()
+                    Button("Import Audio or Video…") { choosingFiles = true }
+                        .buttonStyle(.themedSmall)
+                        .help("Transcribe a recording made elsewhere: mp3, m4a, wav, mp4, mov and more")
                 }
-                ForEach(recorder.recordings) { record in
-                    recordingRow(record, last: record.id == recorder.recordings.last?.id)
+                CardSection {
+                    ForEach(recorder.importing.indices, id: \.self) { index in
+                        CardRow(recorder.importing[index], index == 0 ? "Importing…" : "Waiting to import") {
+                            if index == 0 { ProgressView().controlSize(.small) }
+                        }
+                    }
+                    if recorder.recordings.isEmpty && recorder.importing.isEmpty {
+                        Text("No meetings yet. Record one above, or drop an audio or video file here.")
+                            .foregroundStyle(palette.secondaryText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                    }
+                    ForEach(recorder.recordings) { record in
+                        recordingRow(record, last: record.id == recorder.recordings.last?.id)
+                    }
+                }
+                .overlay {
+                    if dropTargeted {
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .allowsHitTesting(false)
+                    }
                 }
             }
+            .dropDestination(for: URL.self) { urls, _ in
+                let files = urls.filter(Self.isImportable)
+                guard !files.isEmpty else { return false }
+                importFiles(files)
+                return true
+            } isTargeted: {
+                dropTargeted = $0
+            }
+        }
+        .fileImporter(
+            isPresented: $choosingFiles, allowedContentTypes: AudioImport.types, allowsMultipleSelection: true
+        ) { result in
+            if case .success(let urls) = result { importFiles(urls) }
+        }
+        .alert(
+            "Couldn’t import the file",
+            isPresented: Binding(
+                get: { recorder.importError != nil }, set: { if !$0 { recorder.dismissImportError() } })
+        ) {
+            Button("OK") { recorder.dismissImportError() }
+        } message: {
+            Text(recorder.importError ?? "")
         }
         .onAppear {
             recorder.reload()
@@ -72,6 +121,20 @@ struct MeetingsPage: View {
         } message: {
             Text(error ?? "")
         }
+    }
+
+    /// Imports the files and, for a single file, opens it to follow the transcription.
+    private func importFiles(_ urls: [URL]) {
+        Task {
+            let id = await recorder.importFiles(urls)
+            if urls.count == 1, let id { opened = id }
+        }
+    }
+
+    /// Audio and video files; folders and documents dropped by mistake are ignored.
+    static func isImportable(_ url: URL) -> Bool {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
+        return type.conforms(to: .audiovisualContent)
     }
 
     // MARK: - Recording card
@@ -140,7 +203,7 @@ struct MeetingsPage: View {
             ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
         }
         let detail = [
-            Self.duration(record.seconds), record.sourceName ?? "All system audio", size,
+            Self.duration(record.seconds), record.sourceDescription, size,
             record.endedAt == nil && record.id != MeetingRecorder.shared.currentID ? "interrupted" : nil,
             transcriptionNote(record),
         ]

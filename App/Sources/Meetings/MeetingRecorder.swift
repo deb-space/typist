@@ -26,6 +26,8 @@ struct MeetingRecord: Codable, Identifiable, Equatable {
     /// Names you gave the speakers, by ``MeetingTranscript/Speaker/rawValue``. Kept here rather
     /// than in the transcript, so they survive retranscribing.
     var speakerNames: [String: String]?
+    /// The file this meeting was imported from, by name; nil for a recorded meeting.
+    var importedFrom: String?
 
     /// The folder name, set when loading.
     var id = ""
@@ -37,7 +39,12 @@ struct MeetingRecord: Codable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case startedAt, endedAt, sourceName, sourceBundleID, outputDevice, inputDevice, tracks, compressed, log
-        case speakerNames
+        case speakerNames, importedFrom
+    }
+
+    /// What was recorded as the other side, or the imported file.
+    var sourceDescription: String {
+        importedFrom ?? sourceName ?? "All system audio"
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id && lhs.endedAt == rhs.endedAt }
@@ -61,6 +68,9 @@ final class MeetingRecorder {
     private(set) var heardOtherSide = false
     private(set) var error: String?
     private(set) var recordings: [MeetingRecord] = []
+    /// Files being imported, by name, in order.
+    private(set) var importing: [String] = []
+    private(set) var importError: String?
 
     /// The app to record as the other side; nil records all system audio.
     var sourceBundleID: String? {
@@ -215,6 +225,61 @@ final class MeetingRecorder {
             MeetingTranscriber.shared.transcribe(record)
         }
     }
+
+    // MARK: - Importing
+
+    /// Imports audio or video files one after another, each as a meeting of its own, and queues
+    /// them for transcription. Returns the id of the last one imported.
+    @discardableResult
+    func importFiles(_ urls: [URL]) async -> String? {
+        importError = nil
+        importing += urls.map(\.lastPathComponent)
+        var last: String?
+        for url in urls {
+            if let id = await importFile(url) { last = id }
+            importing.removeFirst()
+        }
+        return last
+    }
+
+    func dismissImportError() { importError = nil }
+
+    private func importFile(_ url: URL) async -> String? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        // Named by when it was imported; several files imported within a second get a suffix.
+        let base = formatter.string(from: Date())
+        var folder = Self.directory.appending(path: base, directoryHint: .isDirectory)
+        var suffix = 2
+        while FileManager.default.fileExists(atPath: folder.path) {
+            folder = Self.directory.appending(path: "\(base)-\(suffix)", directoryHint: .isDirectory)
+            suffix += 1
+        }
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let result = try await AudioImport.extract(
+                url, to: folder.appending(path: "audio.m4a"), name: Self.importedTrack)
+            let created = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+            let start = result.recordedAt ?? created ?? Date()
+            var record = MeetingRecord(
+                startedAt: start, endedAt: start.addingTimeInterval(result.track.secondsByFrames), outputDevice: "",
+                inputDevice: "", tracks: [result.track], compressed: true)
+            record.importedFrom = url.lastPathComponent
+            save(record, in: folder)
+            reload()
+            record.id = folder.lastPathComponent
+            MeetingTranscriber.shared.transcribe(record)
+            return record.id
+        } catch {
+            logger.error("import failed: \(String(describing: error), privacy: .public)")
+            try? FileManager.default.removeItem(at: folder)
+            importError = "Couldn’t import \(url.lastPathComponent): \(error)"
+            return nil
+        }
+    }
+
+    /// The name of an imported file's only track.
+    static let importedTrack = "file"
 
     // MARK: - Library
 

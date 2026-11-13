@@ -90,11 +90,23 @@ public actor MLXTextCleaner {
 
     /// The model's cleanup of `text`, not yet checked with ``AICleanup/check(source:output:glossary:)``.
     public func clean(_ text: String, glossary: [String], timeout: Duration) async throws -> String {
-        guard let container else { throw CleanerError.notLoaded }
-        let messages = AICleanup.messages(for: text, glossary: glossary)
         // The same prompt with another dictation shows where the dictation starts.
-        let probe = AICleanup.messages(for: "~", glossary: glossary)
-        let parameters = GenerateParameters(maxTokens: AICleanup.maxTokens(for: text), temperature: 0)
+        let output = try await respond(
+            to: AICleanup.messages(for: text, glossary: glossary),
+            probe: AICleanup.messages(for: "~", glossary: glossary), maxTokens: AICleanup.maxTokens(for: text),
+            timeout: timeout)
+        return AICleanup.extract(output)
+    }
+
+    /// The model's raw answer to `messages`.
+    ///
+    /// - Parameter probe: The same prompt with other text in place of what changes between calls;
+    ///   the shared beginning is run once and reused.
+    public func respond(
+        to messages: [AICleanup.Message], probe: [AICleanup.Message], maxTokens: Int, timeout: Duration
+    ) async throws -> String {
+        guard let container else { throw CleanerError.notLoaded }
+        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0)
         let prefix = prefix
         let stream = try await container.perform { context in
             try await Self.generate(messages, probe: probe, prefix: prefix, parameters: parameters, context: context)
@@ -106,7 +118,7 @@ public actor MLXTextCleaner {
             // Stopping the loop cancels the stream and generation with it.
             if ContinuousClock.now > deadline { throw CleanerError.timedOut }
         }
-        return AICleanup.extract(output)
+        return output
     }
 
     /// Starts generating, reusing the model's state after the system prompt and examples.

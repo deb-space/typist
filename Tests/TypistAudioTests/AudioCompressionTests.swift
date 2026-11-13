@@ -85,3 +85,44 @@ import Testing
         #expect((samples.map(abs).max() ?? 0) > 0.2)
     }
 }
+
+@Suite struct AudioImportTests {
+    @Test func importsAnAudioFile() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appending(path: "interview.wav")
+        let sampleRate = 44_100.0
+        let format = try #require(
+            AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 2, interleaved: false))
+        let frames = AVAudioFrameCount(sampleRate * 4)
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+        buffer.frameLength = frames
+        for channel in 0..<2 {
+            for frame in 0..<Int(frames) {
+                buffer.floatChannelData?[channel][frame] = 0.3 * sin(2 * .pi * 220 * Float(frame) / Float(sampleRate))
+            }
+        }
+        do {
+            let file = try AVAudioFile(forWriting: source, settings: format.settings)
+            try file.write(from: buffer)
+        }
+
+        let result = try await AudioImport.extract(source, to: folder.appending(path: "audio.m4a"), name: "file")
+        #expect(result.track.name == "file")
+        #expect(result.track.file == "audio.m4a")
+        #expect(abs(result.track.secondsByFrames - 4) < 0.1)
+        #expect(abs(Double(try AudioFileSamples.load(folder.appending(path: "audio.m4a")).count) / 16_000 - 4) < 0.1)
+    }
+
+    @Test func refusesAFileWithoutSound() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appending(path: "notes.txt")
+        try Data("not audio".utf8).write(to: source)
+        await #expect(throws: (any Error).self) {
+            try await AudioImport.extract(source, to: folder.appending(path: "audio.m4a"), name: "file")
+        }
+    }
+}

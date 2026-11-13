@@ -36,7 +36,7 @@ struct MeetingDetailView: View {
                 Text(record.startedAt.formatted(date: .complete, time: .shortened))
                     .font(.system(size: 17, weight: .semibold))
                 Text(
-                    [MeetingsPage.duration(record.seconds), record.sourceName ?? "All system audio"]
+                    [MeetingsPage.duration(record.seconds), record.sourceDescription]
                         .joined(separator: " · ")
                 )
                 .font(.system(size: 13))
@@ -145,7 +145,12 @@ struct MeetingDetailView: View {
     // MARK: - Whisper's text
 
     private static func trackTitle(_ track: String) -> String {
-        track == "system" ? "Call audio" : track == "microphone" ? "Your microphone" : "Your microphone (\(track))"
+        switch track {
+        case "system": "Call audio"
+        case MeetingRecorder.importedTrack: "Audio file"
+        case "microphone": "Your microphone"
+        default: "Your microphone (\(track))"
+        }
     }
 
     /// Each track in full, as Whisper heard it: the echo on the microphone, no speakers, no cleanup.

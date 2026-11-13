@@ -161,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             TranscriptionCheck.runIfRequested()
             CleanupCheck.runIfRequested()
             MeetingCheck.runIfRequested()
+            MeetingCleanupSpike.runIfRequested()
             MainWindowSnapshots.runIfRequested()
             // Spike runs and Xcode previews launch extra copies of the app; only a normal launch
             // takes the hotkey and loads the model.
