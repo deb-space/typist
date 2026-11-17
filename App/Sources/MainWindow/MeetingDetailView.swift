@@ -316,7 +316,9 @@ struct MeetingDetailView: View {
             switch transcriber.status[record.id] {
             case .queued:
                 ProgressView().controlSize(.small)
-                Text(recorder.finishingIDs.contains(record.id) ? "Compressing the recording…" : "Waiting to transcribe…")
+                Text(
+                    recorder.finishingIDs.contains(record.id)
+                        ? "Compressing the recording…" : "Waiting to transcribe…")
             case .loadingModel:
                 ProgressView().controlSize(.small)
                 Text("Loading the speech model…")

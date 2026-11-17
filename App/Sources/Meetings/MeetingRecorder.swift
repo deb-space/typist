@@ -48,7 +48,8 @@ struct MeetingRecord: Codable, Identifiable, Equatable {
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id && lhs.endedAt == rhs.endedAt && lhs.tracks.map(\.file) == rhs.tracks.map(\.file) && lhs.compressed == rhs.compressed
+        lhs.id == rhs.id && lhs.endedAt == rhs.endedAt && lhs.tracks.map(\.file) == rhs.tracks.map(\.file)
+            && lhs.compressed == rhs.compressed
     }
 }
 
