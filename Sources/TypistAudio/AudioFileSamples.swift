@@ -9,6 +9,10 @@ public enum AudioFileSamples {
     /// The file is read in pieces, so an hour-long 48 kHz stereo meeting needs memory only for its
     /// 16 kHz result (about 230 MB), not for the whole original.
     public static func load(_ url: URL) throws -> [Float] {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw CaptureError("\(url.lastPathComponent) is missing from the meeting folder")
+        }
+
         let file = try AVAudioFile(forReading: url)
         let source = file.processingFormat
         guard

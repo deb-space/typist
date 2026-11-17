@@ -47,7 +47,9 @@ struct MeetingRecord: Codable, Identifiable, Equatable {
         importedFrom ?? sourceName ?? "All system audio"
     }
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id && lhs.endedAt == rhs.endedAt }
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.endedAt == rhs.endedAt && lhs.tracks.map(\.file) == rhs.tracks.map(\.file) && lhs.compressed == rhs.compressed
+    }
 }
 
 /// Records meetings: the call app's audio and the microphone, as separate tracks, on this Mac.
@@ -60,7 +62,8 @@ final class MeetingRecorder {
 
     private(set) var isRecording = false
     /// Compressing the tracks after a meeting.
-    private(set) var isFinishing = false
+    private(set) var finishingIDs: Set<String> = []
+    var isFinishing: Bool { !finishingIDs.isEmpty }
     private(set) var startedAt: Date?
     private(set) var otherSideLevel: Float = 0
     private(set) var microphoneLevel: Float = 0
@@ -196,7 +199,8 @@ final class MeetingRecorder {
 
     /// Compresses each CAF track to AAC off the main thread, keeping any track that fails.
     private func compress(_ record: MeetingRecord, in folder: URL) {
-        isFinishing = true
+        let id = folder.lastPathComponent
+        finishingIDs.insert(id)
         let tracks = record.tracks
         Task {
             let compressed = await Task.detached(priority: .utility) {
@@ -205,7 +209,6 @@ final class MeetingRecorder {
                     let target = source.deletingPathExtension().appendingPathExtension("m4a")
                     do {
                         try AudioCompression.compress(source, to: target)
-                        try FileManager.default.removeItem(at: source)
                         var track = track
                         track.file = target.lastPathComponent
                         return track
@@ -215,13 +218,19 @@ final class MeetingRecorder {
                     }
                 }
             }.value
+
             var record = record
             record.tracks = compressed
             record.compressed = compressed.allSatisfy { $0.file.hasSuffix(".m4a") }
             save(record, in: folder)
-            isFinishing = false
+
+            for (old, new) in zip(tracks, compressed) where new.file != old.file {
+                try? FileManager.default.removeItem(at: folder.appending(path: old.file))
+            }
+
+            finishingIDs.remove(id)
             reload()
-            record.id = folder.lastPathComponent
+            record.id = id
             MeetingTranscriber.shared.transcribe(record)
         }
     }

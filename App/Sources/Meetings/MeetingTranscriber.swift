@@ -27,10 +27,10 @@ final class MeetingTranscriber {
     private(set) var status: [String: Status] = [:]
     private(set) var transcripts: [String: MeetingTranscript] = [:]
 
-    @ObservationIgnored private var queue: [MeetingRecord] = []
-    /// The meeting being transcribed now. Progress reports arrive asynchronously and can come in
-    /// after the work is done; only the running meeting's status is updated.
-    @ObservationIgnored private var running: String?
+    /// Its running meeting is the one being transcribed now. Progress reports arrive
+    /// asynchronously and can come in after the work is done; only the running meeting's status
+    /// is updated.
+    @ObservationIgnored private var queue = SerialQueue()
     @ObservationIgnored private let logger = Logger(subsystem: "space.deb.typist", category: "meetings")
     private var settings: AppSettings { .shared }
     private var recorder: MeetingRecorder { .shared }
@@ -48,16 +48,17 @@ final class MeetingTranscriber {
     }
 
     func transcribe(_ record: MeetingRecord) {
+        guard !recorder.finishingIDs.contains(record.id) else { return }
         guard status[record.id] == nil || status[record.id].map(isFailed) == true else { return }
         status[record.id] = .queued
-        queue.append(record)
+        queue.enqueue(record.id)
         runQueue()
     }
 
     /// Throws away a meeting's transcript and makes it again, for example after changing the
     /// language or the speech model.
     func retranscribe(_ record: MeetingRecord) {
-        guard running != record.id, status[record.id] != .queued else { return }
+        guard queue.running != record.id, status[record.id] != .queued else { return }
         transcripts[record.id] = nil
         try? FileManager.default.removeItem(at: url(of: record))
         status[record.id] = nil
@@ -65,7 +66,7 @@ final class MeetingTranscriber {
     }
 
     private func reportProgress(_ fraction: Double, for id: String) {
-        guard running == id, status[id] != nil else { return }
+        guard queue.running == id, status[id] != nil else { return }
         status[id] = .transcribing(fraction)
     }
 
@@ -79,10 +80,18 @@ final class MeetingTranscriber {
     }
 
     private func runQueue() {
-        guard running == nil, !queue.isEmpty else { return }
-        let record = queue.removeFirst()
-        running = record.id
+        guard let recordID = queue.start() else { return }
+        guard let record = recorder.recordings.first(where: { $0.id == recordID }) else {
+            status[recordID] = .failed("Meeting record not found")
+            queue.finish()
+            runQueue()
+            return
+        }
         Task {
+            defer {
+                queue.finish()
+                runQueue()
+            }
             do {
                 let transcript = try await run(record)
                 save(transcript, for: record)
@@ -92,8 +101,6 @@ final class MeetingTranscriber {
                 logger.error("meeting transcription failed: \(String(describing: error), privacy: .public)")
                 status[record.id] = .failed(String(describing: error))
             }
-            running = nil
-            runQueue()
         }
     }
 

@@ -49,7 +49,9 @@ struct MeetingDetailView: View {
         .task {
             await player.load(record, folder: recorder.folder(of: record))
             if transcriber.transcript(of: record) == nil, transcriber.status[record.id] == nil {
-                transcriber.transcribe(record)
+                if !recorder.finishingIDs.contains(record.id) {
+                    transcriber.transcribe(record)
+                }
             }
         }
         .onDisappear { player.stop() }
@@ -314,7 +316,7 @@ struct MeetingDetailView: View {
             switch transcriber.status[record.id] {
             case .queued:
                 ProgressView().controlSize(.small)
-                Text("Waiting to transcribe…")
+                Text(recorder.finishingIDs.contains(record.id) ? "Compressing the recording…" : "Waiting to transcribe…")
             case .loadingModel:
                 ProgressView().controlSize(.small)
                 Text("Loading the speech model…")
@@ -329,9 +331,13 @@ struct MeetingDetailView: View {
                 Spacer()
                 Button("Try Again") { transcriber.transcribe(record) }.buttonStyle(.themed)
             case nil:
-                Text("Not transcribed yet.")
-                Spacer()
-                Button("Transcribe") { transcriber.transcribe(record) }.buttonStyle(.themed)
+                if recorder.finishingIDs.contains(record.id) {
+                    Text("Compressing the recording…")
+                } else {
+                    Text("Not transcribed yet.")
+                    Spacer()
+                    Button("Transcribe") { transcriber.transcribe(record) }.buttonStyle(.themed)
+                }
             }
         }
         .font(.system(size: 13))
